@@ -26,6 +26,10 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>TNT 需要麦克风权限来录制语音并转换为文字。</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>TNT 需要语音识别权限来将语音转换为文字。</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>TNT 需要屏幕录制权限来识别屏幕上的文字，辅助语音校正专有名词。</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSSupportsAutomaticTermination</key>

@@ -1,60 +1,69 @@
 import Foundation
+import Speech
 
 protocol ASREngineProtocol: Sendable {
     func transcribe(fileURL: URL) async -> String
 }
 
+/// 使用 Apple SFSpeechRecognizer 进行本地语音识别
 final class ASREngine: @unchecked Sendable, ASREngineProtocol {
     static let shared = ASREngine()
 
-    private let session = URLSession(configuration: .default)
+    private var recognizer: SFSpeechRecognizer?
+    private let queue = DispatchQueue(label: "com.tnt.asr")
 
-    private init() {}
+    private init() {
+        self.recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
+    }
+
+    /// 预热：预加载语音识别器
+    func warmup() {
+        recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
+        TNTLog.info("[ASREngine] Speech recognizer warmed up")
+    }
 
     func transcribe(fileURL: URL) async -> String {
-        let audioPath = fileURL.path
-        let requestBody: [String: Any] = ["audio_path": audioPath]
-
-        guard let bodyData = try? JSONSerialization.data(withJSONObject: requestBody) else {
-            TNTLog.error("[ASREngine] Failed to encode request")
-            return "ERROR: Failed to encode ASR request"
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            TNTLog.error("[ASREngine] Audio file not found: \(fileURL.path)")
+            return "ERROR: Audio file not found"
         }
 
-        var request = URLRequest(url: TNTServerManager.asrURL)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = bodyData
+        guard let recognizer = recognizer, recognizer.isAvailable else {
+            TNTLog.error("[ASREngine] Speech recognizer not available")
+            return "ERROR: Speech recognizer not available"
+        }
 
-        do {
-            let (data, response) = try await session.data(for: request)
+        let request = SFSpeechURLRecognitionRequest(url: fileURL)
+        // 尽可能使用设备端识别（如果可用）
+        if #available(macOS 14.0, *) {
+            request.requiresOnDeviceRecognition = false
+        }
+        request.shouldReportPartialResults = false
 
-            guard let httpResponse = response as? HTTPURLResponse else {
-                return "ERROR: Invalid response from ASR server"
+        return await withCheckedContinuation { continuation in
+            recognizer.recognitionTask(with: request) { result, error in
+                if let error = error {
+                    TNTLog.error("[ASREngine] Recognition error: \(error)")
+                    continuation.resume(returning: "ERROR: \(error.localizedDescription)")
+                    return
+                }
+
+                guard let result = result else {
+                    continuation.resume(returning: "")
+                    return
+                }
+
+                if result.isFinal {
+                    let text = result.bestTranscription.formattedString
+                    TNTLog.info("[ASREngine] Result: \(String(text.prefix(50)))")
+                    continuation.resume(returning: text)
+                }
             }
-
-            guard httpResponse.statusCode == 200 else {
-                let errorText = String(data: data, encoding: .utf8) ?? "Unknown error"
-                TNTLog.error("[ASREngine] Server error \(httpResponse.statusCode): \(errorText)")
-                return "ERROR: ASR server error \(httpResponse.statusCode)"
-            }
-
-            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-                  let text = json["text"] else {
-                TNTLog.error("[ASREngine] Invalid response format")
-                return "ERROR: Invalid ASR response"
-            }
-
-            TNTLog.info("[ASREngine] Result: \(String(text.prefix(50)))")
-            return text
-
-        } catch {
-            TNTLog.error("[ASREngine] Request failed: \(error)")
-            return "ERROR: ASR request failed: \(error.localizedDescription)"
         }
     }
 }
 
-// Mock ASR Engine for testing without models
+/// Mock ASR Engine for testing without speech recognition
 final class MockASREngine: @unchecked Sendable, ASREngineProtocol {
     static let shared = MockASREngine()
 
@@ -62,6 +71,6 @@ final class MockASREngine: @unchecked Sendable, ASREngineProtocol {
 
     func transcribe(fileURL: URL) async -> String {
         try? await Task.sleep(nanoseconds: 500_000_000)
-        return "这是语音识别的模拟结果，实际识别需要运行 Qwen3-ASR 模型。"
+        return "这是语音识别的模拟结果，实际识别需要运行语音识别模型。"
     }
 }

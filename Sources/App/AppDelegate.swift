@@ -7,31 +7,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyManager: HotkeyManager?
     private var toastWindow: ToastWindow?
     private var permissionCheckTimer: Timer?
+    private var screenText: String = ""
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         TNTLog.info("[TNT-App] applicationDidFinishLaunching")
         setupStatusBar()
         setupHotkey()
 
-        // 1. Check Python environment first
+        // 预热模型（异步）
         Task { @MainActor in
-            let pythonOK = await self.checkPythonEnvironment()
-            guard pythonOK else {
-                self.showPythonSetupAlert()
-                return
+            self.statusBarController?.setLoadingState(true)
+
+            // 预热 ASR
+            await ASREngine.shared.warmup()
+
+            // 预热 LLM
+            await LLMRefiner.shared.warmup()
+
+            // 预热 OCR（可选，仅当模型已下载）
+            if PaddleOCREngine.isModelDownloaded() {
+                await PaddleOCREngine.shared.warmup()
             }
 
-            // 2. Start Python HTTP server (models pre-loaded inside)
-            let serverReady = await TNTServerManager.shared.start()
-            if serverReady {
-                AppState.shared.modelsReady = true
-                self.statusBarController?.setLoadingState(false)
-                TNTLog.info("[TNT-App] Python server ready, models pre-loaded")
-            } else {
-                self.statusBarController?.setLoadingState(false)
-                self.showToast("模型服务启动失败", duration: 3.0)
-                TNTLog.error("[TNT-App] Python server failed to start")
-            }
+            AppState.shared.modelsReady = true
+            self.statusBarController?.setLoadingState(false)
+            TNTLog.info("[TNT-App] Models warmed up")
         }
     }
 
@@ -39,33 +39,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         TNTLog.info("[TNT-App] applicationWillTerminate")
         hotkeyManager?.stop()
         permissionCheckTimer?.invalidate()
-        TNTServerManager.shared.stop()
-    }
-
-    /// Restart Python server when model selection changes
-    func restartServerForModelChange() {
-        TNTLog.info("[TNT-App] Restarting server for model change...")
-        AppState.shared.modelsReady = false
-        statusBarController?.setLoadingState(true)
-
-        Task { @MainActor in
-            TNTServerManager.shared.stop()
-            let serverReady = await TNTServerManager.shared.start()
-            if serverReady {
-                AppState.shared.modelsReady = true
-                self.statusBarController?.setLoadingState(false)
-                TNTLog.info("[TNT-App] Server restarted with new model")
-            } else {
-                self.statusBarController?.setLoadingState(false)
-                self.showToast("模型服务重启失败", duration: 3.0)
-                TNTLog.error("[TNT-App] Server restart failed")
-            }
-        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         statusBarController?.toggleMenu()
         return true
+    }
+
+    /// 模型切换后的重启（当前版本使用本地模型，无需重启服务）
+    func restartServerForModelChange() {
+        TNTLog.info("[TNT-App] Model change detected, no server restart needed")
     }
 
     // MARK: - Setup
@@ -127,57 +110,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Python Environment Check
-
-    private func checkPythonEnvironment() async -> Bool {
-        let candidates = [
-            "/opt/anaconda3/bin/python3",
-            "/opt/homebrew/bin/python3",
-            "/usr/local/bin/python3",
-            "/usr/bin/python3",
-        ]
-
-        for py in candidates {
-            guard FileManager.default.isExecutableFile(atPath: py) else { continue }
-            let hasDeps = await verifyPythonDeps(python: py)
-            if hasDeps {
-                TNTLog.info("[TNT-App] Python env OK: \(py)")
-                return true
-            }
-        }
-
-        TNTLog.error("[TNT-App] No Python with mlx-audio + mlx-lm found")
-        return false
-    }
-
-    private func verifyPythonDeps(python: String) async -> Bool {
-        return await withCheckedContinuation { continuation in
-            DispatchQueue.global().async {
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: python)
-                process.arguments = ["-c", "import mlx_audio; import mlx_lm"]
-                process.standardOutput = Pipe()
-                process.standardError = Pipe()
-                do {
-                    try process.run()
-                    process.waitUntilExit()
-                    continuation.resume(returning: process.terminationStatus == 0)
-                } catch {
-                    continuation.resume(returning: false)
-                }
-            }
-        }
-    }
-
     // MARK: - Hotkey Handlers
 
     private var audioRecorder: AudioRecorder?
     private var recordingFile: URL?
+    private var currentSessionId: String?
 
     private func handleHotkeyDown() {
         guard AppState.shared.modelsReady else {
             TNTLog.info("[TNT-App] Hotkey pressed but models not ready")
-            showToast("模型未就绪，请等待服务启动", duration: 2.0)
+            showToast("模型未就绪，请等待加载", duration: 2.0)
             return
         }
 
@@ -186,17 +128,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBarController?.setRecordingState(true)
         showToast("倾听中...")
 
+        // 异步截图+OCR（与录音并行，不阻塞录音）
+        Task.detached {
+            if PaddleOCREngine.isModelDownloaded(),
+               let image = ScreenCapture.captureMainScreen() {
+                let text = await PaddleOCREngine.shared.recognize(image: image)
+                await MainActor.run {
+                    self.screenText = text
+                    TNTLog.info("[TNT-App] Screenshot OCR: \(String(text.prefix(100)))")
+                }
+            }
+        }
+
         audioRecorder = AudioRecorder()
         audioRecorder?.onAudioBuffer = { [weak self] buffer in
             self?.handleAudioBuffer(buffer)
         }
         audioRecorder?.start()
+
+        // 创建诊断会话
+        let isBT = AudioRecorder.isBluetoothInputDevice()
+        currentSessionId = SessionStore.shared.createSession(isBluetooth: isBT)
     }
 
     private func handleHotkeyUp() {
         TNTLog.info("[TNT-App] >>> Combo UP — stopping recording")
         audioRecorder?.stop()
         recordingFile = audioRecorder?.takeRecordingFile()
+
+        // 保存音频文件到诊断会话
+        if let sessionId = currentSessionId {
+            if let original = audioRecorder?.originalFileURL {
+                SessionStore.shared.saveOriginalAudio(sessionId: sessionId, from: original)
+            }
+            if let processed = recordingFile {
+                SessionStore.shared.saveProcessedAudio(sessionId: sessionId, from: processed)
+            }
+        }
+
         audioRecorder = nil
 
         // Guard: no valid recording file (likely user released key before recording started)
@@ -231,9 +200,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func recognizeAndInject(audioFile: URL) async {
+        let sessionId = currentSessionId
+
         TNTLog.info("[TNT-App] Starting ASR...")
         let asrText = await ASREngine.shared.transcribe(fileURL: audioFile)
         TNTLog.info("[TNT-App] ASR result: \(String(asrText.prefix(50)))")
+
+        if let id = sessionId {
+            SessionStore.shared.updateASRResult(sessionId: id, result: asrText)
+        }
 
         await MainActor.run {
             AppState.shared.lastRecognizedText = asrText
@@ -262,15 +237,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         TNTLog.info("[TNT-App] Starting LLM refinement...")
-        let refinedText = await LLMRefiner.shared.refine(text: asrText)
-        TNTLog.info("[TNT-App] LLM result: \(String(refinedText.prefix(50)))")
+        let context = screenText.isEmpty ? nil : screenText
+        let refineOutput = await LLMRefiner.shared.refine(text: asrText, context: context)
+        TNTLog.info("[TNT-App] LLM result: \(String(refineOutput.text.prefix(50)))")
+
+        if let id = sessionId {
+            SessionStore.shared.updateLLMResult(sessionId: id, prompt: refineOutput.prompt, result: refineOutput.text)
+        }
 
         await MainActor.run {
             AppState.shared.mode = .injecting
             showToast("注入中...")
         }
 
-        let finalText = refinedText.isEmpty || refinedText.hasPrefix("ERROR:") ? asrText : refinedText
+        let finalText = refineOutput.text.isEmpty || refineOutput.text.hasPrefix("ERROR:") ? asrText : refineOutput.text
         await injectText(finalText)
     }
 
@@ -304,6 +284,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppState.shared.mode = .idle
         statusBarController?.setRecordingState(false)
         cleanupRecordingFile()
+        screenText = ""
+        currentSessionId = nil
     }
 
     private func finishWithError(_ message: String) {
@@ -312,6 +294,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showToast("✗ \(message)", duration: 2.0)
         statusBarController?.setRecordingState(false)
         cleanupRecordingFile()
+        screenText = ""
 
         Task {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -325,6 +308,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppState.shared.mode = .idle
         statusBarController?.setRecordingState(false)
         cleanupRecordingFile()
+        screenText = ""
+        currentSessionId = nil
     }
 
     private func cleanupRecordingFile() {
@@ -350,8 +335,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let window = NSWindow(contentViewController: hostingController)
         window.title = "TNT 设置"
-        window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 520, height: 400))
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.setContentSize(NSSize(width: 580, height: 520))
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -366,7 +351,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         基于全局快捷键的智能语音输入法。
         按下快捷键说话，松开即完成输入，AI 帮你润色。
 
-        需要 Apple Silicon Mac，32GB+ 统一内存（推荐）。
+        需要 Apple Silicon Mac，8GB+ 统一内存。
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "好的")
@@ -385,32 +370,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                 NSWorkspace.shared.open(url)
             }
-        }
-    }
-
-    private func showPythonSetupAlert() {
-        let alert = NSAlert()
-        alert.messageText = "需要初始化 Python 环境"
-        alert.informativeText = """
-        TNT 需要 Python 3 以及以下依赖包：
-
-        • mlx-audio  (语音转文字)
-        • mlx-lm     (文本校正)
-
-        请打开终端并运行：
-
-        pip install -U mlx-audio mlx-lm
-
-        安装完成后重启 TNT。
-        """
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "复制命令")
-        alert.addButton(withTitle: "好的")
-
-        if alert.runModal() == .alertFirstButtonReturn {
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString("pip install -U mlx-audio mlx-lm", forType: .string)
         }
     }
 }

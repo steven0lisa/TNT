@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreAudio
 import Foundation
 
 final class AudioRecorder: NSObject, @unchecked Sendable {
@@ -11,6 +12,9 @@ final class AudioRecorder: NSObject, @unchecked Sendable {
     private var tempFileURL: URL?
 
     var onAudioBuffer: ((Data) -> Void)?
+
+    /// 原始音频副本（处理后保留，用于诊断）
+    private(set) var originalFileURL: URL?
 
     override init() {
         super.init()
@@ -78,12 +82,69 @@ final class AudioRecorder: NSObject, @unchecked Sendable {
         try? FileManager.default.removeItem(at: finalURL)
         try? FileManager.default.moveItem(at: url, to: finalURL)
 
-        // 后处理：音量归一化 + 静音裁剪
-        let processor = AudioPostProcessor()
-        _ = processor.process(fileURL: finalURL)
+        // 在处理前复制原始音频（用于诊断）
+        let originalURL = URL(fileURLWithPath: NSTemporaryDirectory() + "tnt_recording_original.wav")
+        try? FileManager.default.removeItem(at: originalURL)
+        try? FileManager.default.copyItem(at: finalURL, to: originalURL)
+        originalFileURL = originalURL
 
-        TNTLog.info("[AudioRecorder] Recording saved to \(finalURL.path)")
+        // 后处理：音量归一化 + 静音裁剪（传入蓝牙标志）
+        let bt = Self.isBluetoothInputDevice()
+        let processor = AudioPostProcessor()
+        _ = processor.process(fileURL: finalURL, isBluetooth: bt)
+
+        TNTLog.info("[AudioRecorder] Recording saved to \(finalURL.path) (bluetooth=\(bt))")
         return finalURL
+    }
+
+    // MARK: - Bluetooth Detection
+
+    /// 检测当前默认输入设备是否为蓝牙设备
+    static func isBluetoothInputDevice() -> Bool {
+        var deviceID: AudioDeviceID = 0
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0,
+            nil,
+            &size,
+            &deviceID
+        )
+        guard status == noErr, deviceID != kAudioObjectUnknown else {
+            TNTLog.debug("[AudioRecorder] Cannot get default input device")
+            return false
+        }
+
+        var transportType: UInt32 = 0
+        size = UInt32(MemoryLayout<UInt32>.size)
+        address.mSelector = kAudioDevicePropertyTransportType
+
+        let transportStatus = AudioObjectGetPropertyData(
+            deviceID,
+            &address,
+            0,
+            nil,
+            &size,
+            &transportType
+        )
+        guard transportStatus == noErr else {
+            TNTLog.debug("[AudioRecorder] Cannot get transport type for device \(deviceID)")
+            return false
+        }
+
+        let isBT = transportType == kAudioDeviceTransportTypeBluetooth
+            || transportType == kAudioDeviceTransportTypeBluetoothLE
+        if isBT {
+            TNTLog.info("[AudioRecorder] Bluetooth input device detected (transport=\(transportType))")
+        }
+        return isBT
     }
 
     private func handleAudioTap(buffer: AVAudioPCMBuffer, inputFormat: AVAudioFormat, outputFormat: AVAudioFormat) {

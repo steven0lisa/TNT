@@ -53,3 +53,12 @@ DerivedData/
 *.tmp
 *.bak
 *.swp
+
+# 构建分发产物
+dist/
+
+# 日志目录
+logs/
+
+# SPM resolved
+Package.resolved

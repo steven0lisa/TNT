@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: echo "VERSION=$(cat VERSION | tr -d '\n')" >> $GITHUB_OUTPUT
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build
+        run: |
+          xcodebuild -project TNT.xcodeproj \
+            -scheme TNT \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package DMG
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          APP_PATH="build/Build/Products/Release/TNT.app"
+          DMG_NAME="TNT-${VERSION}.dmg"
+          DMG_PATH="dist/${DMG_NAME}"
+
+          mkdir -p dist
+          rm -f "$DMG_PATH"
+
+          # Verify app exists
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Error: App not found at $APP_PATH"
+            find build/Build/Products -name "*.app" 2>/dev/null || true
+            exit 1
+          fi
+
+          # Update Info.plist version
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "$APP_PATH/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "$APP_PATH/Contents/Info.plist"
+
+          # Create DMG
+          hdiutil create -volname "TNT ${VERSION}" \
+            -srcfolder "$APP_PATH" \
+            -ov -format UDZO \
+            "$DMG_PATH"
+
+          echo "DMG created: $DMG_PATH"
+          ls -lh "$DMG_PATH"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          # Extract changelog from package.json releaseHistory
+          python3 -c "
+          import json
+          with open('package.json') as f:
+              data = json.load(f)
+          for release in data.get('releaseHistory', []):
+              if release['version'] == '$VERSION':
+                  print('\n'.join(release.get('changes', [])))
+                  break
+          " > CHANGELOG.txt 2>/dev/null || echo "- Release ${VERSION}" > CHANGELOG.txt
+          cat CHANGELOG.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "TNT ${{ steps.version.outputs.VERSION }}"
+          body_path: CHANGELOG.txt
+          files: dist/TNT-*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

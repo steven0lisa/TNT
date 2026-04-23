@@ -2,22 +2,33 @@ name: TNT
 options:
   bundleIdPrefix: com.tnt
   deploymentTarget:
-    macOS: "13.0"
+    macOS: "14.0"
   xcodeVersion: "16.0"
   generateEmptyDirectories: true
 
 settings:
   base:
     SWIFT_VERSION: "6.2"
-    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
     PRODUCT_NAME: TNT
-    MARKETING_VERSION: "1.0.0"
+    MARKETING_VERSION: "1.1.0"
     CURRENT_PROJECT_VERSION: "1"
     INFOPLIST_FILE: Sources/App/Info.plist
     CODE_SIGN_ENTITLEMENTS: Sources/App/TNT.entitlements
     ENABLE_HARDENED_RUNTIME: YES
     CODE_SIGN_IDENTITY: "-"
     SWIFT_STRICT_CONCURRENCY: complete
+
+packages:
+  mlx-swift:
+    url: https://github.com/ml-explore/mlx-swift
+    from: 0.31.3
+  mlx-swift-lm:
+    url: https://github.com/ml-explore/mlx-swift-lm
+    from: 3.31.3
+  swift-transformers:
+    url: https://github.com/huggingface/swift-transformers
+    from: 1.3.0
 
 targets:
   TNT:
@@ -29,14 +40,23 @@ targets:
           - "**/.DS_Store"
       - path: Resources
         buildPhase: resources
-      - path: scripts/asr_infer.py
-        buildPhase: resources
-      - path: scripts/llm_refine.py
-        buildPhase: resources
-      - path: scripts/tnt_server.py
-        buildPhase: resources
       - path: package.json
         buildPhase: resources
+    dependencies:
+      - package: mlx-swift
+        product: MLX
+      - package: mlx-swift
+        product: MLXNN
+      - package: mlx-swift
+        product: MLXFast
+      - package: mlx-swift-lm
+        product: MLXLLM
+      - package: mlx-swift-lm
+        product: MLXLMCommon
+      - package: mlx-swift-lm
+        product: MLXHuggingFace
+      - package: swift-transformers
+        product: Tokenizers
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tnt.app

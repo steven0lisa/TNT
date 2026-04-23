@@ -5,6 +5,7 @@ enum ModelType: String, Sendable {
     case asrLarge
     case llmSmall
     case llmLarge
+    case ocr
 }
 
 struct ModelInfo: Codable, Sendable {
@@ -117,6 +118,7 @@ final class ModelManager: @unchecked Sendable {
         case .asrLarge: return config.models.asrLarge
         case .llmSmall: return config.models.llmSmall
         case .llmLarge: return config.models.llmLarge
+        case .ocr: return nil
         }
     }
 
@@ -129,8 +131,9 @@ final class ModelManager: @unchecked Sendable {
         switch type {
         case .asrSmall: return modelDir + "/Qwen3-ASR-0.6B"
         case .asrLarge: return modelDir + "/Qwen3-ASR-1.7B"
-        case .llmSmall: return modelDir + "/Qwen3.6-0.5B-4bit"
+        case .llmSmall: return modelDir + "/Qwen3-0.6B-4bit"
         case .llmLarge: return modelDir + "/Qwen3-4B-4bit"
+        case .ocr: return modelDir + "/PaddleOCR-VL"
         }
     }
 
@@ -159,7 +162,7 @@ final class ModelManager: @unchecked Sendable {
 
     // MARK: - Download with progress
 
-    func downloadModel(for type: ModelType, onProgress: ((Double) -> Void)? = nil) async -> Bool {
+    func downloadModel(for type: ModelType, onProgress: (@Sendable (DownloadProgress) -> Void)? = nil) async -> Bool {
         let downloader = ModelDownloader.shared
         return await downloader.download(type: type, onProgress: { progress in
             onProgress?(progress)

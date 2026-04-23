@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 struct SettingsView: View {
@@ -15,18 +16,19 @@ struct SettingsView: View {
                     Label("模型", systemImage: "cpu")
                 }
 
-            HotkeyDiagnosticsTab()
+            DiagnosticsTab()
                 .tabItem {
                     Label("诊断", systemImage: "stethoscope")
                 }
         }
-        .frame(width: 520, height: 420)
+        .frame(minWidth: 520, minHeight: 420)
         .padding()
     }
 }
 
 struct GeneralTab: View {
     @State private var hotkey: String = UserDefaults.standard.string(forKey: "hotkey") ?? "Option + Control + Command"
+    @StateObject private var updateChecker = UpdateChecker.shared
 
     var body: some View {
         Form {
@@ -43,6 +45,57 @@ struct GeneralTab: View {
                 Text("按下快捷键开始录音，松开后自动输入文字。")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+
+            Section("版本与更新") {
+                HStack {
+                    Text("当前版本")
+                    Spacer()
+                    Text(updateChecker.currentVersion)
+                        .foregroundColor(.secondary)
+                }
+
+                HStack {
+                    if updateChecker.isChecking {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("正在检查...")
+                            .foregroundColor(.secondary)
+                    } else if let release = updateChecker.latestRelease {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("发现新版本 \(release.version)")
+                                .foregroundColor(.orange)
+                            if let asset = release.dmgAsset {
+                                Button("下载并安装 (\(asset.sizeLabel))") {
+                                    Task { await updateChecker.downloadAndOpen(asset: asset) }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                            }
+                            if !release.body.isEmpty {
+                                Text(release.body)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(5)
+                            }
+                        }
+                    } else if let error = updateChecker.errorMessage {
+                        Text(error)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                    } else {
+                        Text("已是最新版本")
+                            .foregroundColor(.green)
+                    }
+
+                    Spacer()
+
+                    Button("检查更新") {
+                        Task { await updateChecker.checkForUpdates() }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(updateChecker.isChecking)
+                }
             }
 
             Section("权限状态") {
@@ -144,8 +197,8 @@ struct ModelsTab: View {
                         .foregroundColor(.secondary)
 
                     llmModelRow(
-                        name: "Qwen3.6-0.5B",
-                        size: "~300MB",
+                        name: "Qwen3-0.6B",
+                        size: "~335MB",
                         desc: "速度快，适合日常使用（默认）",
                         type: .llmSmall
                     )
@@ -157,6 +210,20 @@ struct ModelsTab: View {
                         size: "~2.5GB",
                         desc: "效果更好，适合高精度场景",
                         type: .llmLarge
+                    )
+                }
+            }
+
+            Section("OCR 屏幕识别模型") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("下载后，录音时会自动截取屏幕并识别文字，辅助校正专有名词。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    ocrModelRow(
+                        name: "PaddleOCR-VL",
+                        size: "~1.8GB",
+                        desc: "屏幕文字识别，提升语音校正准确率"
                     )
                 }
             }
@@ -211,12 +278,20 @@ struct ModelsTab: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             } else if isDownloading {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("下载中...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressView(value: Double(modelManager.downloadPercent) / 100.0)
+                        .progressViewStyle(.linear)
+                        .frame(width: 120)
+                    HStack(spacing: 8) {
+                        Text("\(modelManager.downloadPercent)%")
+                            .font(.caption)
+                            .monospacedDigit()
+                        if !modelManager.downloadSpeed.isEmpty {
+                            Text(modelManager.downloadSpeed)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
             } else {
                 Button("下载") {
@@ -277,17 +352,91 @@ struct ModelsTab: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             } else if isDownloading {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("下载中...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressView(value: Double(modelManager.downloadPercent) / 100.0)
+                        .progressViewStyle(.linear)
+                        .frame(width: 120)
+                    HStack(spacing: 8) {
+                        Text("\(modelManager.downloadPercent)%")
+                            .font(.caption)
+                            .monospacedDigit()
+                        if !modelManager.downloadSpeed.isEmpty {
+                            Text(modelManager.downloadSpeed)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
             } else {
                 Button("下载") {
                     Task {
                         await modelManager.downloadModel(type)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func ocrModelRow(name: String, size: String, desc: String) -> some View {
+        let isDownloaded = modelManager.isDownloaded(.ocr)
+        let isDownloading = modelManager.isDownloading(.ocr)
+
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: isDownloaded ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(isDownloaded ? .green : .secondary)
+                .font(.title3)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(name)
+                        .font(.headline)
+                    Text(size)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Text(desc)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            if isDownloaded {
+                Label("已就绪", systemImage: "checkmark")
+                    .font(.caption)
+                    .foregroundColor(.green)
+
+                Button(role: .destructive) {
+                    modelManager.deleteModel(.ocr)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else if isDownloading {
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressView(value: Double(modelManager.downloadPercent) / 100.0)
+                        .progressViewStyle(.linear)
+                        .frame(width: 120)
+                    HStack(spacing: 8) {
+                        Text("\(modelManager.downloadPercent)%")
+                            .font(.caption)
+                            .monospacedDigit()
+                        if !modelManager.downloadSpeed.isEmpty {
+                            Text(modelManager.downloadSpeed)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            } else {
+                Button("下载") {
+                    Task {
+                        await modelManager.downloadModel(.ocr)
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -348,81 +497,186 @@ struct ModelsTab: View {
     }
 }
 
-struct HotkeyDiagnosticsTab: View {
-    @State private var diagnosticText: String = "点击刷新查看状态"
-    @State private var isRefreshing = false
+struct DiagnosticsTab: View {
+    @State private var sessions: [SessionRecord] = []
+    @State private var selectedId: String?
+    @State private var playingType: String? = nil // "original" or "processed"
+    @State private var player: AVAudioPlayer?
 
     var body: some View {
-        Form {
-            Section("热键诊断") {
-                Text(diagnosticText)
-                    .font(.system(.caption, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(6)
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("最近 \(sessions.count) 条语音记录")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button(action: reload) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
 
-                HStack {
-                    Button("刷新状态") {
-                        refreshDiagnostics()
-                    }
-                    .buttonStyle(.bordered)
+            Divider()
 
-                    if isRefreshing {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-
+            if sessions.isEmpty {
+                VStack(spacing: 8) {
                     Spacer()
-
-                    Button("打开辅助功能设置") {
-                        openAccessibilitySettings()
+                    Text("暂无语音记录")
+                        .foregroundColor(.secondary)
+                    Text("按住快捷键说话后，记录将出现在这里")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(selection: $selectedId) {
+                    ForEach(sessions) { session in
+                        SessionRow(
+                            session: session,
+                            playingType: playingType,
+                            onPlay: { type in playAudio(sessionId: session.id, type: type) },
+                            onStop: stopAudio
+                        )
+                        .tag(session.id)
                     }
-                    .buttonStyle(.bordered)
                 }
-            }
-
-            Section("使用说明") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("1. 确保 TNT 已添加到「系统设置 → 隐私与安全性 → 辅助功能」并开启开关")
-                        .font(.caption)
-                    Text("2. 授予权限后，TNT 会自动检测并启用热键")
-                        .font(.caption)
-                    Text("3. 按住 Option + Control + Command 开始录音，松开结束")
-                        .font(.caption)
-                    Text("4. 如果热键仍不工作，请查看 Console.app 中的 TNT 日志")
-                        .font(.caption)
-                }
-                .foregroundColor(.secondary)
+                .listStyle(.sidebar)
             }
         }
-        .formStyle(.grouped)
-        .padding()
-        .onAppear {
-            refreshDiagnostics()
+        .onAppear { reload() }
+    }
+
+    private func reload() {
+        sessions = SessionStore.shared.loadSessions()
+    }
+
+    private func playAudio(sessionId: String, type: String) {
+        stopAudio()
+        guard let url = SessionStore.shared.audioURL(sessionId: sessionId, type: type) else { return }
+        player = try? AVAudioPlayer(contentsOf: url)
+        player?.play()
+        playingType = type
+        // Auto-reset when playback ends
+        DispatchQueue.main.asyncAfter(deadline: .now() + (player?.duration ?? 5.0)) {
+            playingType = nil
         }
     }
 
-    private func refreshDiagnostics() {
-        isRefreshing = true
-        // Use a small delay to show the refresh animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            let trusted = AXIsProcessTrustedWithOptions(
-                ["AXTrustedCheckOptionPrompt": false] as CFDictionary
-            )
-            let info = """
-            辅助功能权限: \(trusted ? "✅ 已授权" : "❌ 未授权")
-            激活快捷键: Option + Control + Command
-            """
-            diagnosticText = info
-            isRefreshing = false
+    private func stopAudio() {
+        player?.stop()
+        player = nil
+        playingType = nil
+    }
+}
+
+// MARK: - SessionRow
+
+private struct SessionRow: View {
+    let session: SessionRecord
+    let playingType: String?
+    let onPlay: (String) -> Void
+    let onStop: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Header line
+            HStack {
+                Text(session.displayTime)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.secondary)
+                Text(session.shortId)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundColor(.secondary)
+                if session.isBluetooth {
+                    Text("BT")
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(3)
+                }
+                Spacer()
+                if let error = session.errorMessage {
+                    Text(error)
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                }
+            }
+
+            // Audio playback buttons
+            HStack(spacing: 8) {
+                if session.hasOriginalAudio {
+                    playButton(label: "原始", type: "original", isPlaying: playingType == "original")
+                }
+                if session.hasProcessedAudio {
+                    playButton(label: "处理后", type: "processed", isPlaying: playingType == "processed")
+                }
+            }
+
+            // ASR result
+            if let asr = session.asrResult, !asr.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("ASR")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                    Text(asr)
+                        .font(.system(.caption, design: .monospaced))
+                        .lineLimit(3)
+                }
+            }
+
+            // LLM result
+            if let llm = session.llmResult, !llm.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("LLM")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                    Text(llm)
+                        .font(.system(.caption, design: .monospaced))
+                        .lineLimit(3)
+                }
+            }
+
+            // LLM prompt (collapsible)
+            if let prompt = session.llmPrompt, !prompt.isEmpty {
+                DisclosureGroup {
+                    Text(prompt)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .textSelection(.enabled)
+                } label: {
+                    Text("提示词")
+                        .font(.caption2)
+                        .foregroundColor(.purple)
+                }
+            }
         }
+        .padding(.vertical, 4)
     }
 
-    private func openAccessibilitySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
+    private func playButton(label: String, type: String, isPlaying: Bool) -> some View {
+        Button(action: {
+            if isPlaying {
+                onStop()
+            } else {
+                onPlay(type)
+            }
+        }) {
+            HStack(spacing: 2) {
+                Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle.fill")
+                    .font(.caption)
+                Text(label)
+                    .font(.caption2)
+            }
+            .foregroundColor(isPlaying ? .red : .accentColor)
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -445,6 +699,14 @@ final class ModelManagerWrapper: ObservableObject {
     @Published private(set) var llmLargeDownloading: Bool = false
     @Published var selectedLLMModel: String
 
+    // OCR
+    @Published private(set) var ocrDownloaded: Bool = false
+    @Published private(set) var ocrDownloading: Bool = false
+
+    // Download progress
+    @Published private(set) var downloadPercent: Int = 0
+    @Published private(set) var downloadSpeed: String = ""
+
     private let manager = ModelManager.shared
 
     init() {
@@ -458,9 +720,10 @@ final class ModelManagerWrapper: ObservableObject {
         asrLargeDownloaded = manager.isDownloaded(type: .asrLarge)
         llmSmallDownloaded = manager.isDownloaded(type: .llmSmall)
         llmLargeDownloaded = manager.isDownloaded(type: .llmLarge)
+        ocrDownloaded = manager.isDownloaded(type: .ocr)
         selectedASRModel = manager.selectedASRModel
         selectedLLMModel = manager.selectedLLMModel
-        TNTLog.info("[ModelManagerWrapper] ASR-small: \(asrSmallDownloaded ? "ready" : "missing"), ASR-large: \(asrLargeDownloaded ? "ready" : "missing"), LLM-small: \(llmSmallDownloaded ? "ready" : "missing"), LLM-large: \(llmLargeDownloaded ? "ready" : "missing")")
+        TNTLog.info("[ModelManagerWrapper] ASR-small: \(asrSmallDownloaded ? "ready" : "missing"), ASR-large: \(asrLargeDownloaded ? "ready" : "missing"), LLM-small: \(llmSmallDownloaded ? "ready" : "missing"), LLM-large: \(llmLargeDownloaded ? "ready" : "missing"), OCR: \(ocrDownloaded ? "ready" : "missing")")
     }
 
     func isDownloaded(_ type: ModelType) -> Bool {
@@ -469,6 +732,7 @@ final class ModelManagerWrapper: ObservableObject {
         case .asrLarge: return asrLargeDownloaded
         case .llmSmall: return llmSmallDownloaded
         case .llmLarge: return llmLargeDownloaded
+        case .ocr: return ocrDownloaded
         }
     }
 
@@ -478,6 +742,7 @@ final class ModelManagerWrapper: ObservableObject {
         case .asrLarge: return asrLargeDownloading
         case .llmSmall: return llmSmallDownloading
         case .llmLarge: return llmLargeDownloading
+        case .ocr: return ocrDownloading
         }
     }
 
@@ -492,18 +757,29 @@ final class ModelManagerWrapper: ObservableObject {
         case .asrLarge: asrLargeDownloading = true
         case .llmSmall: llmSmallDownloading = true
         case .llmLarge: llmLargeDownloading = true
+        case .ocr: ocrDownloading = true
         }
 
+        downloadPercent = 0
+        downloadSpeed = ""
         TNTLog.info("[ModelManagerWrapper] Starting download for \(type)")
 
-        let success = await manager.downloadModel(for: type)
+        let success = await manager.downloadModel(for: type) { [weak self] progress in
+            Task { @MainActor in
+                self?.downloadPercent = Int(progress.fraction * 100)
+                self?.downloadSpeed = Self.formatSpeed(progress.speedBytesPerSec)
+            }
+        }
 
         switch type {
         case .asrSmall: asrSmallDownloading = false
         case .asrLarge: asrLargeDownloading = false
         case .llmSmall: llmSmallDownloading = false
         case .llmLarge: llmLargeDownloading = false
+        case .ocr: ocrDownloading = false
         }
+        downloadPercent = 0
+        downloadSpeed = ""
 
         refreshStatus()
 
@@ -520,10 +796,19 @@ final class ModelManagerWrapper: ObservableObject {
                 if !manager.isDownloaded(type: otherType) {
                     selectLLMModel(type == .llmLarge ? "large" : "small")
                 }
+            } else if type == .ocr {
+                // Warmup OCR engine after download
+                await PaddleOCREngine.shared.warmup()
             }
         } else {
             TNTLog.error("[ModelManagerWrapper] Download failed for \(type)")
         }
+    }
+
+    private static func formatSpeed(_ bytesPerSec: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .binary
+        return formatter.string(fromByteCount: bytesPerSec) + "/s"
     }
 
     func deleteModel(_ type: ModelType) {
