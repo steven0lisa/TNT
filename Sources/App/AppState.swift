@@ -35,6 +35,8 @@ final class AppState: ObservableObject {
     @Published var modelsReady: Bool = false
     @Published var asrModelLoaded: Bool = false
     @Published var llmModelLoaded: Bool = false
+    @Published var selectedASRModel: String = ModelManager.shared.selectedASRModel
+    @Published var selectedLLMModel: String = ModelManager.shared.selectedLLMModel
     @Published var lastRecognizedText: String = ""
     @Published var toastMessage: String = ""
 
@@ -42,5 +44,15 @@ final class AppState: ObservableObject {
 
     func setMode(_ newMode: AppMode) {
         mode = newMode
+    }
+
+    func updateSelectedASRModel(_ model: String) {
+        selectedASRModel = model
+        ModelManager.shared.selectedASRModel = model
+    }
+
+    func updateSelectedLLMModel(_ model: String) {
+        selectedLLMModel = model
+        ModelManager.shared.selectedLLMModel = model
     }
 }

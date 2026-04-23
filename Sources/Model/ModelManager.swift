@@ -1,8 +1,10 @@
 import Foundation
 
 enum ModelType: String, Sendable {
-    case asr
-    case llm
+    case asrSmall
+    case asrLarge
+    case llmSmall
+    case llmLarge
 }
 
 struct ModelInfo: Codable, Sendable {
@@ -26,8 +28,10 @@ struct PackageConfig: Codable, Sendable {
     let models: Models
 
     struct Models: Codable, Sendable {
-        let asr: ModelInfo
-        let llm: ModelInfo
+        let asrSmall: ModelInfo
+        let asrLarge: ModelInfo
+        let llmSmall: ModelInfo
+        let llmLarge: ModelInfo
     }
 }
 
@@ -36,6 +40,34 @@ final class ModelManager: @unchecked Sendable {
 
     private var config: PackageConfig?
     private let lock = NSLock()
+
+    /// User-selected ASR model: "small" or "large"
+    var selectedASRModel: String {
+        get { UserDefaults.standard.string(forKey: "selectedASRModel") ?? "small" }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "selectedASRModel")
+            TNTLog.info("[ModelManager] Selected ASR model changed to: \(newValue)")
+        }
+    }
+
+    /// User-selected LLM model: "small" (0.5B) or "large" (4B)
+    var selectedLLMModel: String {
+        get { UserDefaults.standard.string(forKey: "selectedLLMModel") ?? "small" }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "selectedLLMModel")
+            TNTLog.info("[ModelManager] Selected LLM model changed to: \(newValue)")
+        }
+    }
+
+    /// The active ASR model type based on user selection
+    var activeASRType: ModelType {
+        selectedASRModel == "large" ? .asrLarge : .asrSmall
+    }
+
+    /// The active LLM model type based on user selection
+    var activeLLMType: ModelType {
+        selectedLLMModel == "large" ? .llmLarge : .llmSmall
+    }
 
     var modelsDirectory: URL {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -81,8 +113,10 @@ final class ModelManager: @unchecked Sendable {
         defer { lock.unlock() }
         guard let config else { return nil }
         switch type {
-        case .asr: return config.models.asr
-        case .llm: return config.models.llm
+        case .asrSmall: return config.models.asrSmall
+        case .asrLarge: return config.models.asrLarge
+        case .llmSmall: return config.models.llmSmall
+        case .llmLarge: return config.models.llmLarge
         }
     }
 
@@ -93,8 +127,10 @@ final class ModelManager: @unchecked Sendable {
         }
         let modelDir = modelsDirectory.path
         switch type {
-        case .asr: return modelDir + "/Qwen3-ASR-0.6B"
-        case .llm: return modelDir + "/Qwen3-4B-4bit"
+        case .asrSmall: return modelDir + "/Qwen3-ASR-0.6B"
+        case .asrLarge: return modelDir + "/Qwen3-ASR-1.7B"
+        case .llmSmall: return modelDir + "/Qwen3.6-0.5B-4bit"
+        case .llmLarge: return modelDir + "/Qwen3-4B-4bit"
         }
     }
 
@@ -102,9 +138,7 @@ final class ModelManager: @unchecked Sendable {
         let path = modelPath(for: type)
         var isDir: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
-        // Must be a directory with files inside (not an empty placeholder)
         guard exists && isDir.boolValue else { return false }
-        // Check there are actual model files
         if let contents = try? FileManager.default.contentsOfDirectory(atPath: path) {
             let hasFiles = contents.contains { !$0.hasPrefix(".") }
             return hasFiles

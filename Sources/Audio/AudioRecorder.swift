@@ -77,6 +77,11 @@ final class AudioRecorder: NSObject, @unchecked Sendable {
         let finalURL = URL(fileURLWithPath: NSTemporaryDirectory() + "tnt_recording.wav")
         try? FileManager.default.removeItem(at: finalURL)
         try? FileManager.default.moveItem(at: url, to: finalURL)
+
+        // 后处理：音量归一化 + 静音裁剪
+        let processor = AudioPostProcessor()
+        _ = processor.process(fileURL: finalURL)
+
         TNTLog.info("[AudioRecorder] Recording saved to \(finalURL.path)")
         return finalURL
     }

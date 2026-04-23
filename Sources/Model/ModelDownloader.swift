@@ -188,18 +188,26 @@ final class ModelDownloader: @unchecked Sendable {
 
     private func repoId(for type: ModelType) -> String {
         switch type {
-        case .asr:
+        case .asrSmall:
             return "mlx-community/Qwen3-ASR-0.6B-4bit"
-        case .llm:
+        case .asrLarge:
+            return "mlx-community/Qwen3-ASR-1.7B-4bit"
+        case .llmSmall:
+            return "mlx-community/Qwen3.6-0.5B-4bit"
+        case .llmLarge:
             return "mlx-community/Qwen3-4B-4bit"
         }
     }
 
     private func directoryName(for type: ModelType) -> String {
         switch type {
-        case .asr:
+        case .asrSmall:
             return "Qwen3-ASR-0.6B"
-        case .llm:
+        case .asrLarge:
+            return "Qwen3-ASR-1.7B"
+        case .llmSmall:
+            return "Qwen3.6-0.5B-4bit"
+        case .llmLarge:
             return "Qwen3-4B-4bit"
         }
     }

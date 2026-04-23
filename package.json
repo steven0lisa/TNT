@@ -22,28 +22,52 @@
   "license": "MIT",
   "swiftVersion": "6.2",
   "models": {
-    "asr": {
+    "asrSmall": {
       "name": "Qwen3-ASR-0.6B",
       "quantization": "4-bit",
       "size": "~500MB",
-      "source": "Qwen/Qwen3-ASR-0.6B",
+      "source": "mlx-community/Qwen3-ASR-0.6B-4bit",
       "path": "~/.tnt/models/Qwen3-ASR-0.6B",
       "downloaded": false,
       "urls": {
-        "huggingface": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B",
-        "modelscope": "https://modelscope.cn/models/Qwen/Qwen3-ASR-0.6B"
+        "huggingface": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-4bit",
+        "modelscope": "https://modelscope.cn/models/mlx-community/Qwen3-ASR-0.6B-4bit"
       }
     },
-    "llm": {
+    "asrLarge": {
+      "name": "Qwen3-ASR-1.7B",
+      "quantization": "4-bit",
+      "size": "~1.3GB",
+      "source": "mlx-community/Qwen3-ASR-1.7B-4bit",
+      "path": "~/.tnt/models/Qwen3-ASR-1.7B",
+      "downloaded": false,
+      "urls": {
+        "huggingface": "https://huggingface.co/mlx-community/Qwen3-ASR-1.7B-4bit",
+        "modelscope": "https://modelscope.cn/models/mlx-community/Qwen3-ASR-1.7B-4bit"
+      }
+    },
+    "llmSmall": {
+      "name": "Qwen3.6-0.5B",
+      "quantization": "4-bit",
+      "size": "~300MB",
+      "source": "mlx-community/Qwen3.6-0.5B-4bit",
+      "path": "~/.tnt/models/Qwen3.6-0.5B-4bit",
+      "downloaded": false,
+      "urls": {
+        "huggingface": "https://huggingface.co/mlx-community/Qwen3.6-0.5B-4bit",
+        "modelscope": "https://modelscope.cn/models/mlx-community/Qwen3.6-0.5B-4bit"
+      }
+    },
+    "llmLarge": {
       "name": "Qwen3-4B-4bit",
       "quantization": "4-bit",
       "size": "~2.5GB",
-      "source": "Qwen/Qwen3-4B",
+      "source": "mlx-community/Qwen3-4B-4bit",
       "path": "~/.tnt/models/Qwen3-4B-4bit",
       "downloaded": false,
       "urls": {
-        "huggingface": "https://huggingface.co/Qwen/Qwen3-4B",
-        "modelscope": "https://modelscope.cn/models/ZhipuAI/glm-4-9b-chat"
+        "huggingface": "https://huggingface.co/mlx-community/Qwen3-4B-4bit",
+        "modelscope": "https://modelscope.cn/models/mlx-community/Qwen3-4B-4bit"
       }
     }
   },

@@ -113,24 +113,188 @@ struct ModelsTab: View {
                 }
             }
 
-            Section("ASR 模型") {
-                modelRow(
-                    name: "Qwen3-ASR-0.6B",
-                    size: "~500MB",
-                    type: .asr
-                )
+            Section("ASR 语音识别模型") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("选择并下载要使用的模型。更大的模型精度更高，但占用更多内存。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    asrModelRow(
+                        name: "Qwen3-ASR-0.6B",
+                        size: "~500MB",
+                        desc: "速度快，适合日常使用",
+                        type: .asrSmall
+                    )
+
+                    Divider()
+
+                    asrModelRow(
+                        name: "Qwen3-ASR-1.7B",
+                        size: "~1.3GB",
+                        desc: "精度更高，适合复杂场景",
+                        type: .asrLarge
+                    )
+                }
             }
 
             Section("LLM 校正模型") {
-                modelRow(
-                    name: "Qwen3-4B-4bit",
-                    size: "~2.5GB",
-                    type: .llm
-                )
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("选择并下载要使用的校正模型。更大的模型效果更好，但速度更慢。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    llmModelRow(
+                        name: "Qwen3.6-0.5B",
+                        size: "~300MB",
+                        desc: "速度快，适合日常使用（默认）",
+                        type: .llmSmall
+                    )
+
+                    Divider()
+
+                    llmModelRow(
+                        name: "Qwen3-4B-4bit",
+                        size: "~2.5GB",
+                        desc: "效果更好，适合高精度场景",
+                        type: .llmLarge
+                    )
+                }
             }
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    @ViewBuilder
+    private func asrModelRow(name: String, size: String, desc: String, type: ModelType) -> some View {
+        let isSelected = modelManager.selectedASRModel == (type == .asrLarge ? "large" : "small")
+        let isDownloaded = modelManager.isDownloaded(type)
+        let isDownloading = modelManager.isDownloading(type)
+
+        HStack(alignment: .top, spacing: 12) {
+            // Selection indicator
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(isSelected ? .accentColor : .secondary)
+                .font(.title3)
+                .onTapGesture {
+                    guard isDownloaded else { return }
+                    modelManager.selectASRModel(type == .asrLarge ? "large" : "small")
+                }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(name)
+                        .font(.headline)
+                    Text(size)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Text(desc)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            if isDownloaded {
+                if isSelected {
+                    Label("使用中", systemImage: "checkmark")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+
+                Button(role: .destructive) {
+                    modelManager.deleteModel(type)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else if isDownloading {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("下载中...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                Button("下载") {
+                    Task {
+                        await modelManager.downloadModel(type)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func llmModelRow(name: String, size: String, desc: String, type: ModelType) -> some View {
+        let isSelected = modelManager.selectedLLMModel == (type == .llmLarge ? "large" : "small")
+        let isDownloaded = modelManager.isDownloaded(type)
+        let isDownloading = modelManager.isDownloading(type)
+
+        HStack(alignment: .top, spacing: 12) {
+            // Selection indicator
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(isSelected ? .accentColor : .secondary)
+                .font(.title3)
+                .onTapGesture {
+                    guard isDownloaded else { return }
+                    modelManager.selectLLMModel(type == .llmLarge ? "large" : "small")
+                }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(name)
+                        .font(.headline)
+                    Text(size)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Text(desc)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            if isDownloaded {
+                if isSelected {
+                    Label("使用中", systemImage: "checkmark")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+
+                Button(role: .destructive) {
+                    modelManager.deleteModel(type)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else if isDownloading {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("下载中...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                Button("下载") {
+                    Task {
+                        await modelManager.downloadModel(type)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     @ViewBuilder
@@ -267,34 +431,53 @@ struct HotkeyDiagnosticsTab: View {
 final class ModelManagerWrapper: ObservableObject {
     static let shared = ModelManagerWrapper()
 
-    @Published private(set) var asrDownloaded: Bool = false
-    @Published private(set) var llmDownloaded: Bool = false
-    @Published private(set) var asrDownloading: Bool = false
-    @Published private(set) var llmDownloading: Bool = false
+    // ASR
+    @Published private(set) var asrSmallDownloaded: Bool = false
+    @Published private(set) var asrLargeDownloaded: Bool = false
+    @Published private(set) var asrSmallDownloading: Bool = false
+    @Published private(set) var asrLargeDownloading: Bool = false
+    @Published var selectedASRModel: String
+
+    // LLM
+    @Published private(set) var llmSmallDownloaded: Bool = false
+    @Published private(set) var llmLargeDownloaded: Bool = false
+    @Published private(set) var llmSmallDownloading: Bool = false
+    @Published private(set) var llmLargeDownloading: Bool = false
+    @Published var selectedLLMModel: String
 
     private let manager = ModelManager.shared
 
     init() {
+        selectedASRModel = manager.selectedASRModel
+        selectedLLMModel = manager.selectedLLMModel
         refreshStatus()
     }
 
     func refreshStatus() {
-        asrDownloaded = manager.isDownloaded(type: .asr)
-        llmDownloaded = manager.isDownloaded(type: .llm)
-        TNTLog.info("[ModelManagerWrapper] ASR: \(asrDownloaded ? "ready" : "missing"), LLM: \(llmDownloaded ? "ready" : "missing")")
+        asrSmallDownloaded = manager.isDownloaded(type: .asrSmall)
+        asrLargeDownloaded = manager.isDownloaded(type: .asrLarge)
+        llmSmallDownloaded = manager.isDownloaded(type: .llmSmall)
+        llmLargeDownloaded = manager.isDownloaded(type: .llmLarge)
+        selectedASRModel = manager.selectedASRModel
+        selectedLLMModel = manager.selectedLLMModel
+        TNTLog.info("[ModelManagerWrapper] ASR-small: \(asrSmallDownloaded ? "ready" : "missing"), ASR-large: \(asrLargeDownloaded ? "ready" : "missing"), LLM-small: \(llmSmallDownloaded ? "ready" : "missing"), LLM-large: \(llmLargeDownloaded ? "ready" : "missing")")
     }
 
     func isDownloaded(_ type: ModelType) -> Bool {
         switch type {
-        case .asr: return asrDownloaded
-        case .llm: return llmDownloaded
+        case .asrSmall: return asrSmallDownloaded
+        case .asrLarge: return asrLargeDownloaded
+        case .llmSmall: return llmSmallDownloaded
+        case .llmLarge: return llmLargeDownloaded
         }
     }
 
     func isDownloading(_ type: ModelType) -> Bool {
         switch type {
-        case .asr: return asrDownloading
-        case .llm: return llmDownloading
+        case .asrSmall: return asrSmallDownloading
+        case .asrLarge: return asrLargeDownloading
+        case .llmSmall: return llmSmallDownloading
+        case .llmLarge: return llmLargeDownloading
         }
     }
 
@@ -304,26 +487,40 @@ final class ModelManagerWrapper: ObservableObject {
             return
         }
 
-        if type == .asr {
-            asrDownloading = true
-        } else {
-            llmDownloading = true
+        switch type {
+        case .asrSmall: asrSmallDownloading = true
+        case .asrLarge: asrLargeDownloading = true
+        case .llmSmall: llmSmallDownloading = true
+        case .llmLarge: llmLargeDownloading = true
         }
 
         TNTLog.info("[ModelManagerWrapper] Starting download for \(type)")
 
         let success = await manager.downloadModel(for: type)
 
-        if type == .asr {
-            asrDownloading = false
-        } else {
-            llmDownloading = false
+        switch type {
+        case .asrSmall: asrSmallDownloading = false
+        case .asrLarge: asrLargeDownloading = false
+        case .llmSmall: llmSmallDownloading = false
+        case .llmLarge: llmLargeDownloading = false
         }
 
         refreshStatus()
 
         if success {
             TNTLog.info("[ModelManagerWrapper] Download succeeded for \(type)")
+            // Auto-select if this is the only downloaded model of its category
+            if type == .asrSmall || type == .asrLarge {
+                let otherType: ModelType = (type == .asrSmall) ? .asrLarge : .asrSmall
+                if !manager.isDownloaded(type: otherType) {
+                    selectASRModel(type == .asrLarge ? "large" : "small")
+                }
+            } else if type == .llmSmall || type == .llmLarge {
+                let otherType: ModelType = (type == .llmSmall) ? .llmLarge : .llmSmall
+                if !manager.isDownloaded(type: otherType) {
+                    selectLLMModel(type == .llmLarge ? "large" : "small")
+                }
+            }
         } else {
             TNTLog.error("[ModelManagerWrapper] Download failed for \(type)")
         }
@@ -334,8 +531,46 @@ final class ModelManagerWrapper: ObservableObject {
             try manager.deleteModel(for: type)
             refreshStatus()
             TNTLog.info("[ModelManagerWrapper] Deleted \(type) model")
+            // If deleted the currently selected model, switch to the other one if available
+            if (type == .asrSmall && selectedASRModel == "small") ||
+               (type == .asrLarge && selectedASRModel == "large") {
+                let otherType: ModelType = (type == .asrSmall) ? .asrLarge : .asrSmall
+                if manager.isDownloaded(type: otherType) {
+                    selectASRModel(type == .asrSmall ? "large" : "small")
+                }
+            } else if (type == .llmSmall && selectedLLMModel == "small") ||
+                      (type == .llmLarge && selectedLLMModel == "large") {
+                let otherType: ModelType = (type == .llmSmall) ? .llmLarge : .llmSmall
+                if manager.isDownloaded(type: otherType) {
+                    selectLLMModel(type == .llmSmall ? "large" : "small")
+                }
+            }
         } catch {
             TNTLog.error("[ModelManagerWrapper] Failed to delete \(type): \(error)")
+        }
+    }
+
+    func selectASRModel(_ model: String) {
+        guard manager.selectedASRModel != model else { return }
+        manager.selectedASRModel = model
+        selectedASRModel = model
+        AppState.shared.updateSelectedASRModel(model)
+
+        // Restart Python server to load the new ASR model
+        if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+            appDelegate.restartServerForModelChange()
+        }
+    }
+
+    func selectLLMModel(_ model: String) {
+        guard manager.selectedLLMModel != model else { return }
+        manager.selectedLLMModel = model
+        selectedLLMModel = model
+        AppState.shared.updateSelectedLLMModel(model)
+
+        // Restart Python server to load the new LLM model
+        if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+            appDelegate.restartServerForModelChange()
         }
     }
 }

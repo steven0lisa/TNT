@@ -39,6 +39,8 @@ final class TNTServerManager: @unchecked Sendable {
         proc.arguments = [script]
         proc.environment = ProcessInfo.processInfo.environment
         proc.environment?["TNT_SERVER_PORT"] = "\(Self.port)"
+        proc.environment?["TNT_ASR_MODEL"] = ModelManager.shared.selectedASRModel
+        proc.environment?["TNT_LLM_MODEL"] = ModelManager.shared.selectedLLMModel
 
         // Capture stderr for diagnostics
         let errPipe = Pipe()

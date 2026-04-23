@@ -42,6 +42,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         TNTServerManager.shared.stop()
     }
 
+    /// Restart Python server when model selection changes
+    func restartServerForModelChange() {
+        TNTLog.info("[TNT-App] Restarting server for model change...")
+        AppState.shared.modelsReady = false
+        statusBarController?.setLoadingState(true)
+
+        Task { @MainActor in
+            TNTServerManager.shared.stop()
+            let serverReady = await TNTServerManager.shared.start()
+            if serverReady {
+                AppState.shared.modelsReady = true
+                self.statusBarController?.setLoadingState(false)
+                TNTLog.info("[TNT-App] Server restarted with new model")
+            } else {
+                self.statusBarController?.setLoadingState(false)
+                self.showToast("模型服务重启失败", duration: 3.0)
+                TNTLog.error("[TNT-App] Server restart failed")
+            }
+        }
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         statusBarController?.toggleMenu()
         return true
@@ -178,11 +199,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recordingFile = audioRecorder?.takeRecordingFile()
         audioRecorder = nil
 
-        // Guard: no valid recording file
+        // Guard: no valid recording file (likely user released key before recording started)
         guard let file = recordingFile,
               FileManager.default.fileExists(atPath: file.path) else {
-            TNTLog.warning("[TNT-App] No recording file, aborting")
-            finishWithError("录音文件无效")
+            TNTLog.warning("[TNT-App] No recording file, aborting silently")
+            finishSilently()
             return
         }
 

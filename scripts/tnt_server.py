@@ -23,10 +23,24 @@ import traceback
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 
 PORT = int(os.environ.get("TNT_SERVER_PORT", "18765"))
-LOCAL_ASR_PATH = os.path.expanduser("~/.tnt/models/Qwen3-ASR-0.6B")
-REMOTE_ASR_ID = "mlx-community/Qwen3-ASR-0.6B-4bit"
-LOCAL_LLM_PATH = os.path.expanduser("~/.tnt/models/Qwen3-4B-4bit")
-REMOTE_LLM_ID = "mlx-community/Qwen3-4B-4bit"
+ASR_MODEL_SIZE = os.environ.get("TNT_ASR_MODEL", "small")  # "small" or "large"
+LLM_MODEL_SIZE = os.environ.get("TNT_LLM_MODEL", "small")  # "small" (0.5B) or "large" (4B)
+
+# ASR model config based on selection
+if ASR_MODEL_SIZE == "large":
+    LOCAL_ASR_PATH = os.path.expanduser("~/.tnt/models/Qwen3-ASR-1.7B")
+    REMOTE_ASR_ID = "mlx-community/Qwen3-ASR-1.7B-4bit"
+else:
+    LOCAL_ASR_PATH = os.path.expanduser("~/.tnt/models/Qwen3-ASR-0.6B")
+    REMOTE_ASR_ID = "mlx-community/Qwen3-ASR-0.6B-4bit"
+
+# LLM model config based on selection
+if LLM_MODEL_SIZE == "large":
+    LOCAL_LLM_PATH = os.path.expanduser("~/.tnt/models/Qwen3-4B-4bit")
+    REMOTE_LLM_ID = "mlx-community/Qwen3-4B-4bit"
+else:
+    LOCAL_LLM_PATH = os.path.expanduser("~/.tnt/models/Qwen3.6-0.5B-4bit")
+    REMOTE_LLM_ID = "mlx-community/Qwen3.6-0.5B-4bit"
 
 # ---------------------------------------------------------------------------
 # 模型加载状态
