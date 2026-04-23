@@ -1,0 +1,72 @@
+{
+  "name": "tnt",
+  "version": "1.0.0",
+  "description": "TNT — Touch and Talk: MacOS 全局智能语音输入法",
+  "versionCode": "100",
+  "buildNumber": "0",
+  "author": {
+    "name": "张子超"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "keywords": [
+    "macos",
+    "voice-input",
+    "speech-to-text",
+    "rime",
+    "asr",
+    "llm"
+  ],
+  "license": "MIT",
+  "swiftVersion": "6.2",
+  "models": {
+    "asr": {
+      "name": "Qwen3-ASR-0.6B",
+      "quantization": "4-bit",
+      "size": "~500MB",
+      "source": "Qwen/Qwen3-ASR-0.6B",
+      "path": "~/.tnt/models/Qwen3-ASR-0.6B",
+      "downloaded": false,
+      "urls": {
+        "huggingface": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B",
+        "modelscope": "https://modelscope.cn/models/Qwen/Qwen3-ASR-0.6B"
+      }
+    },
+    "llm": {
+      "name": "Qwen3-4B-4bit",
+      "quantization": "4-bit",
+      "size": "~2.5GB",
+      "source": "Qwen/Qwen3-4B",
+      "path": "~/.tnt/models/Qwen3-4B-4bit",
+      "downloaded": false,
+      "urls": {
+        "huggingface": "https://huggingface.co/Qwen/Qwen3-4B",
+        "modelscope": "https://modelscope.cn/models/ZhipuAI/glm-4-9b-chat"
+      }
+    }
+  },
+  "settings": {
+    "default": {
+      "hotkey": "rightOption",
+      "asrEngine": "qwen3-asr-0.6b",
+      "llmEnabled": true,
+      "llmModel": "qwen3-4b-4bit",
+      "contextEnabled": true
+    }
+  },
+  "releaseHistory": [
+    {
+      "version": "1.0.0",
+      "date": "2026-04-22",
+      "changes": [
+        "Initial release: 全局 Push-to-Talk 语音输入",
+        "Qwen3-ASR-0.6B 本地 ASR",
+        "Qwen3-4B-4bit 本地 LLM 校正",
+        "菜单栏托盘 UI",
+        "快捷键可配置"
+      ]
+    }
+  ]
+}
