@@ -20,7 +20,7 @@ trap cleanup EXIT
 
 echo "[create-dmg] Version: ${VERSION}"
 
-# 1. 生成背景图 (660x400, 深色主题)
+# 1. 生成背景图 (660x400, 浅色主题)
 echo "[create-dmg] Generating background image..."
 python3 << 'PYEOF'
 import struct, zlib, os
@@ -28,27 +28,26 @@ import struct, zlib, os
 WIDTH, HEIGHT = 660, 400
 
 def make_png():
-    # RGBA pixels
     pixels = []
     for y in range(HEIGHT):
         row = []
         for x in range(WIDTH):
-            # Dark background #1c1c1f
-            r, g, b, a = 28, 28, 31, 255
-            # Top accent bar (0-50px)
+            # Light background #f5f5f7
+            r, g, b, a = 245, 245, 247, 255
+            # Top accent bar (0-50px): blue gradient fading into white
             if y < 50:
                 t = y / 50.0
-                r = int(28 + (50 - 28) * (1 - t))
-                g = int(28 + (80 - 28) * (1 - t))
-                b = int(31 + (140 - 31) * (1 - t))
-            # Bottom hint bar (360-400px)
+                r = int(100 + (245 - 100) * t)
+                g = int(150 + (245 - 150) * t)
+                b = int(240 + (247 - 240) * t)
+            # Bottom hint bar (360-400px): subtle gray
             elif y > 360:
                 t = (y - 360) / 40.0
-                r = int(28 + 15 * t)
-                g = int(28 + 15 * t)
-                b = int(31 + 15 * t)
+                r = int(245 - 10 * t)
+                g = int(245 - 10 * t)
+                b = int(247 - 8 * t)
             row.extend([r, g, b, a])
-        pixels.append(bytes([0] + row))  # filter byte + row data
+        pixels.append(bytes([0] + row))
 
     raw = b''.join(pixels)
 
@@ -84,17 +83,20 @@ def make_png():
     for y in range(HEIGHT):
         row = []
         for x in range(WIDTH):
-            r, g, b, a = 28, 28, 31, 255
+            # Light background #f5f5f7
+            r, g, b, a = 245, 245, 247, 255
+            # Top accent bar (0-50px): blue gradient fading into white
             if y < 50:
                 t = y / 50.0
-                r = int(28 + (50 - 28) * (1 - t))
-                g = int(28 + (80 - 28) * (1 - t))
-                b = int(31 + (140 - 31) * (1 - t))
+                r = int(100 + (245 - 100) * t)
+                g = int(150 + (245 - 150) * t)
+                b = int(240 + (247 - 240) * t)
+            # Bottom hint bar (360-400px): subtle gray
             elif y > 360:
                 t = (y - 360) / 40.0
-                r = int(28 + 15 * t)
-                g = int(28 + 15 * t)
-                b = int(31 + 15 * t)
+                r = int(245 - 10 * t)
+                g = int(245 - 10 * t)
+                b = int(247 - 8 * t)
             row.extend([r, g, b, a])
         pixels.append(bytes([0] + row))
 
