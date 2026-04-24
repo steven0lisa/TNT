@@ -55,6 +55,9 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "$APP_PATH/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "$APP_PATH/Contents/Info.plist"
 
+          # Ad-hoc code sign (prevents "damaged" Gatekeeper error)
+          codesign --force --deep --sign - "$APP_PATH"
+
           # Create DMG
           hdiutil create -volname "TNT ${VERSION}" \
             -srcfolder "$APP_PATH" \
