@@ -60,6 +60,15 @@ final class ModelManager: @unchecked Sendable {
         }
     }
 
+    /// User-selected OCR engine: "vision" (default, system native) or "paddleocr"
+    var selectedOCREngine: String {
+        get { UserDefaults.standard.string(forKey: "selectedOCREngine") ?? "vision" }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "selectedOCREngine")
+            TNTLog.info("[ModelManager] Selected OCR engine changed to: \(newValue)")
+        }
+    }
+
     /// The active ASR model type based on user selection
     var activeASRType: ModelType {
         selectedASRModel == "large" ? .asrLarge : .asrSmall

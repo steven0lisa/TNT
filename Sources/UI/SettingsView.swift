@@ -149,6 +149,7 @@ struct GeneralTab: View {
 
 struct ModelsTab: View {
     @StateObject private var modelManager = ModelManagerWrapper.shared
+    @State private var ocrEngine: String = ModelManager.shared.selectedOCREngine
 
     var body: some View {
         Form {
@@ -214,17 +215,33 @@ struct ModelsTab: View {
                 }
             }
 
-            Section("OCR 屏幕识别模型") {
+            Section("OCR 屏幕识别") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("下载后，录音时会自动截取屏幕并识别文字，辅助校正专有名词。")
+                    Text("录音时自动截取屏幕并识别文字，辅助校正专有名词。系统原生 Vision 无需下载即可使用。")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    ocrModelRow(
-                        name: "PaddleOCR-VL",
-                        size: "~1.8GB",
-                        desc: "屏幕文字识别，提升语音校正准确率"
-                    )
+                    Picker("OCR 引擎", selection: $ocrEngine) {
+                        Text("系统原生 Vision").tag("vision")
+                        Text("PaddleOCR-VL").tag("paddleocr")
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: ocrEngine) { _, newValue in
+                        modelManager.selectOCREngine(newValue)
+                    }
+
+                    if ocrEngine == "paddleocr" {
+                        if !modelManager.isDownloaded(.ocr) {
+                            Text("PaddleOCR-VL 模型未下载，将自动回退到系统原生 Vision")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+                        ocrModelRow(
+                            name: "PaddleOCR-VL",
+                            size: "~1.8GB",
+                            desc: "屏幕文字识别，提升语音校正准确率"
+                        )
+                    }
                 }
             }
         }
@@ -406,7 +423,7 @@ struct ModelsTab: View {
             Spacer()
 
             if isDownloaded {
-                Label("已就绪", systemImage: "checkmark")
+                Label("使用中", systemImage: "checkmark")
                     .font(.caption)
                     .foregroundColor(.green)
 
@@ -891,5 +908,11 @@ final class ModelManagerWrapper: ObservableObject {
         if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
             appDelegate.restartServerForModelChange()
         }
+    }
+
+    func selectOCREngine(_ engine: String) {
+        guard manager.selectedOCREngine != engine else { return }
+        manager.selectedOCREngine = engine
+        TNTLog.info("[ModelManagerWrapper] OCR engine selected: \(engine)")
     }
 }

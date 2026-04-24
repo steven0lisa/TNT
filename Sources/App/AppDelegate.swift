@@ -143,13 +143,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 异步截图+OCR（与录音并行，不阻塞录音）
         Task.detached {
-            if PaddleOCREngine.isModelDownloaded(),
-               let image = await ScreenCapture.captureMainScreen() {
-                let text = await PaddleOCREngine.shared.recognize(image: image)
-                await MainActor.run {
-                    self.screenText = text
-                    TNTLog.info("[TNT-App] Screenshot OCR: \(String(text.prefix(100)))")
-                }
+            guard let image = await ScreenCapture.captureMainScreen() else { return }
+
+            let text: String
+            let engineName: String
+
+            if ModelManager.shared.selectedOCREngine == "paddleocr",
+               PaddleOCREngine.isModelDownloaded(),
+               PaddleOCREngine.shared.isAvailable {
+                text = await PaddleOCREngine.shared.recognize(image: image)
+                engineName = "PaddleOCR-VL"
+            } else {
+                text = await VisionOCREngine.shared.recognize(image: image)
+                engineName = "Vision"
+            }
+
+            await MainActor.run {
+                self.screenText = text
+                TNTLog.info("[TNT-App] Screenshot OCR (\(engineName)): \(String(text.prefix(100)))")
             }
         }
 

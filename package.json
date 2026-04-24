@@ -1,6 +1,6 @@
 {
   "name": "tnt",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "TNT — Touch and Talk: MacOS 全局智能语音输入法",
   "versionCode": "100",
   "buildNumber": "0",
@@ -81,6 +81,16 @@
     }
   },
   "releaseHistory": [
+    {
+      "version": "1.1.5",
+      "date": "2026-04-24",
+      "changes": [
+        "feat: 新增 macOS 原生 Vision OCR 引擎（无需下载，完全离线）",
+        "feat: OCR 引擎可切换：系统原生 Vision（默认）/ PaddleOCR-VL",
+        "feat: 未下载 PaddleOCR 时自动回退到 Vision OCR，不再跳过截图",
+        "feat: 设置页新增 OCR 引擎分段选择器"
+      ]
+    },
     {
       "version": "1.1.4",
       "date": "2026-04-24",
