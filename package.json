@@ -1,6 +1,6 @@
 {
   "name": "tnt",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "TNT — Touch and Talk: MacOS 全局智能语音输入法",
   "versionCode": "100",
   "buildNumber": "0",
@@ -81,6 +81,15 @@
     }
   },
   "releaseHistory": [
+    {
+      "version": "1.1.6",
+      "date": "2026-04-24",
+      "changes": [
+        "fix: 修复 GitHub Actions CI 构建失败（找不到 AudioCommon 模块）",
+        "fix: project.yml 补全缺失的 qwen3-asr-swift SPM 依赖声明",
+        "fix: Package.swift 和 project.yml 将 qwen3-asr-swift 从 branch:main 固定到具体 revision"
+      ]
+    },
     {
       "version": "1.1.5",
       "date": "2026-04-24",

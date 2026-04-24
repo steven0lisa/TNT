@@ -11,7 +11,7 @@ settings:
     SWIFT_VERSION: "6.2"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     PRODUCT_NAME: TNT
-    MARKETING_VERSION: "1.1.5"
+    MARKETING_VERSION: "1.1.6"
     CURRENT_PROJECT_VERSION: "1"
     INFOPLIST_FILE: Sources/App/Info.plist
     CODE_SIGN_ENTITLEMENTS: Sources/App/TNT.entitlements
@@ -29,6 +29,9 @@ packages:
   swift-transformers:
     url: https://github.com/huggingface/swift-transformers
     from: 1.3.0
+  qwen3-asr-swift:
+    url: https://github.com/ivan-digital/qwen3-asr-swift
+    revision: d28d97883ae09cc97be42f18e7a269a725d1335d
 
 targets:
   TNT:
@@ -55,6 +58,10 @@ targets:
         product: MLXLMCommon
       - package: swift-transformers
         product: Tokenizers
+      - package: qwen3-asr-swift
+        product: Qwen3ASR
+      - package: qwen3-asr-swift
+        product: AudioCommon
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tnt.app

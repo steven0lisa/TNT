@@ -11,7 +11,7 @@ let package = Package(
         .package(url: "https://github.com/ml-explore/mlx-swift", .upToNextMinor(from: "0.31.3")),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm", .upToNextMajor(from: "3.31.3")),
         .package(url: "https://github.com/huggingface/swift-transformers", .upToNextMajor(from: "1.3.0")),
-        .package(url: "https://github.com/ivan-digital/qwen3-asr-swift", branch: "main"),
+        .package(url: "https://github.com/ivan-digital/qwen3-asr-swift", revision: "d28d97883ae09cc97be42f18e7a269a725d1335d"),
     ],
     targets: [
         .executableTarget(
