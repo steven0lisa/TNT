@@ -1,6 +1,6 @@
 {
   "name": "tnt",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "TNT — Touch and Talk: MacOS 全局智能语音输入法",
   "versionCode": "100",
   "buildNumber": "0",
@@ -81,6 +81,17 @@
     }
   },
   "releaseHistory": [
+    {
+      "version": "1.1.8",
+      "date": "2026-04-25",
+      "changes": [
+        "feat: 集成火山引擎（字节跳动）大模型流式语音识别 ASR",
+        "feat: ASR 引擎三选一：Qwen3-ASR（本地）/ Apple 语音识别（本地）/ 火山引擎（云端）",
+        "feat: 火山引擎 ASR 支持双向流式优化版（bigmodel_async）接口",
+        "feat: 设置页新增火山引擎 ASR 配置表单（AppID / AccessToken / SecretKey）",
+        "feat: 火山 ASR 使用自定义二进制 WebSocket 协议，WAV 自动转码为 16kHz 16bit PCM"
+      ]
+    },
     {
       "version": "1.1.7",
       "date": "2026-04-24",

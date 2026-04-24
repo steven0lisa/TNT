@@ -69,6 +69,37 @@ final class ModelManager: @unchecked Sendable {
         }
     }
 
+    /// User-selected ASR engine: "qwen" (default), "apple", or "volc"
+    var selectedASREngine: String {
+        get { UserDefaults.standard.string(forKey: "selectedASREngine") ?? "qwen" }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "selectedASREngine")
+            TNTLog.info("[ModelManager] Selected ASR engine changed to: \(newValue)")
+        }
+    }
+
+    // MARK: - VolcEngine ASR Configuration
+
+    var volcAppId: String {
+        get { UserDefaults.standard.string(forKey: "volcAppId") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "volcAppId") }
+    }
+
+    var volcAccessKey: String {
+        get { UserDefaults.standard.string(forKey: "volcAccessKey") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "volcAccessKey") }
+    }
+
+    var volcSecretKey: String {
+        get { UserDefaults.standard.string(forKey: "volcSecretKey") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "volcSecretKey") }
+    }
+
+    var volcResourceId: String {
+        get { UserDefaults.standard.string(forKey: "volcResourceId") ?? "volc.bigasr.sauc.duration" }
+        set { UserDefaults.standard.set(newValue, forKey: "volcResourceId") }
+    }
+
     /// The active ASR model type based on user selection
     var activeASRType: ModelType {
         selectedASRModel == "large" ? .asrLarge : .asrSmall

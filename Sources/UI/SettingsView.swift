@@ -150,6 +150,10 @@ struct GeneralTab: View {
 struct ModelsTab: View {
     @StateObject private var modelManager = ModelManagerWrapper.shared
     @State private var ocrEngine: String = ModelManager.shared.selectedOCREngine
+    @State private var asrEngine: String = ModelManager.shared.selectedASREngine
+    @State private var volcAppId: String = ModelManager.shared.volcAppId
+    @State private var volcAccessKey: String = ModelManager.shared.volcAccessKey
+    @State private var volcSecretKey: String = ModelManager.shared.volcSecretKey
 
     var body: some View {
         Form {
@@ -167,27 +171,66 @@ struct ModelsTab: View {
                 }
             }
 
-            Section("ASR 语音识别模型") {
+            Section("ASR 语音识别") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("选择并下载要使用的模型。更大的模型精度更高，但占用更多内存。")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Picker("ASR 引擎", selection: $asrEngine) {
+                        Text("Qwen3-ASR（本地）").tag("qwen")
+                        Text("Apple 语音识别（本地）").tag("apple")
+                        Text("火山引擎（云端）").tag("volc")
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: asrEngine) { _, newValue in
+                        modelManager.selectASREngine(newValue)
+                    }
 
-                    asrModelRow(
-                        name: "Qwen3-ASR-0.6B",
-                        size: "~500MB",
-                        desc: "速度快，适合日常使用",
-                        type: .asrSmall
-                    )
+                    if asrEngine == "qwen" {
+                        Text("选择并下载要使用的模型。更大的模型精度更高，但占用更多内存。")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
 
-                    Divider()
+                        asrModelRow(
+                            name: "Qwen3-ASR-0.6B",
+                            size: "~500MB",
+                            desc: "速度快，适合日常使用",
+                            type: .asrSmall
+                        )
 
-                    asrModelRow(
-                        name: "Qwen3-ASR-1.7B",
-                        size: "~1.3GB",
-                        desc: "精度更高，适合复杂场景",
-                        type: .asrLarge
-                    )
+                        Divider()
+
+                        asrModelRow(
+                            name: "Qwen3-ASR-1.7B",
+                            size: "~1.3GB",
+                            desc: "精度更高，适合复杂场景",
+                            type: .asrLarge
+                        )
+                    } else if asrEngine == "apple" {
+                        Text("使用 macOS 系统自带的 SFSpeechRecognizer 进行语音识别。无需下载模型，但识别精度可能低于本地大模型。")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else if asrEngine == "volc" {
+                        Text("使用火山引擎大模型语音识别服务。需要配置 AppID 和 AccessKey。录音将通过网络发送到火山引擎云端进行识别。")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            TextField("App ID", text: $volcAppId)
+                                .textFieldStyle(.roundedBorder)
+                            TextField("Access Token", text: $volcAccessKey)
+                                .textFieldStyle(.roundedBorder)
+                            SecureField("Secret Key", text: $volcSecretKey)
+                                .textFieldStyle(.roundedBorder)
+                            Button("保存配置") {
+                                modelManager.updateVolcConfig(
+                                    appId: volcAppId,
+                                    accessKey: volcAccessKey,
+                                    secretKey: volcSecretKey
+                                )
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
+                        .padding(.top, 4)
+                    }
                 }
             }
 
@@ -742,6 +785,7 @@ final class ModelManagerWrapper: ObservableObject {
     @Published private(set) var asrSmallDownloading: Bool = false
     @Published private(set) var asrLargeDownloading: Bool = false
     @Published var selectedASRModel: String
+    @Published var selectedASREngine: String
 
     // LLM
     @Published private(set) var llmSmallDownloaded: Bool = false
@@ -762,6 +806,7 @@ final class ModelManagerWrapper: ObservableObject {
 
     init() {
         selectedASRModel = manager.selectedASRModel
+        selectedASREngine = manager.selectedASREngine
         selectedLLMModel = manager.selectedLLMModel
         refreshStatus()
     }
@@ -773,6 +818,7 @@ final class ModelManagerWrapper: ObservableObject {
         llmLargeDownloaded = manager.isDownloaded(type: .llmLarge)
         ocrDownloaded = manager.isDownloaded(type: .ocr)
         selectedASRModel = manager.selectedASRModel
+        selectedASREngine = manager.selectedASREngine
         selectedLLMModel = manager.selectedLLMModel
         TNTLog.info("[ModelManagerWrapper] ASR-small: \(asrSmallDownloaded ? "ready" : "missing"), ASR-large: \(asrLargeDownloaded ? "ready" : "missing"), LLM-small: \(llmSmallDownloaded ? "ready" : "missing"), LLM-large: \(llmLargeDownloaded ? "ready" : "missing"), OCR: \(ocrDownloaded ? "ready" : "missing")")
     }
@@ -914,5 +960,19 @@ final class ModelManagerWrapper: ObservableObject {
         guard manager.selectedOCREngine != engine else { return }
         manager.selectedOCREngine = engine
         TNTLog.info("[ModelManagerWrapper] OCR engine selected: \(engine)")
+    }
+
+    func selectASREngine(_ engine: String) {
+        guard manager.selectedASREngine != engine else { return }
+        manager.selectedASREngine = engine
+        selectedASREngine = engine
+        TNTLog.info("[ModelManagerWrapper] ASR engine selected: \(engine)")
+    }
+
+    func updateVolcConfig(appId: String, accessKey: String, secretKey: String) {
+        manager.volcAppId = appId
+        manager.volcAccessKey = accessKey
+        manager.volcSecretKey = secretKey
+        TNTLog.info("[ModelManagerWrapper] Volc ASR config updated")
     }
 }

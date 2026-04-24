@@ -264,15 +264,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let asrStart = Date()
         var asrText: String
 
-        if QwenASREngine.shared.isReady {
-            asrText = await QwenASREngine.shared.transcribe(fileURL: audioFile)
-            // QwenASR 失败时 fallback 到 SFSpeechRecognizer
+        let engine = ModelManager.shared.selectedASREngine
+        switch engine {
+        case "volc":
+            TNTLog.info("[TNT-App] Using VolcEngine ASR")
+            asrText = await VolcASREngine.shared.transcribe(fileURL: audioFile)
+            // Volc 失败时 fallback 到 Apple
             if asrText.hasPrefix("ERROR:") {
-                TNTLog.warning("[TNT-App] QwenASR failed, falling back to SFSpeechRecognizer")
+                TNTLog.warning("[TNT-App] VolcASR failed, falling back to SFSpeechRecognizer")
                 asrText = await ASREngine.shared.transcribe(fileURL: audioFile)
             }
-        } else {
+        case "apple":
+            TNTLog.info("[TNT-App] Using Apple SFSpeechRecognizer")
             asrText = await ASREngine.shared.transcribe(fileURL: audioFile)
+        default: // "qwen"
+            if QwenASREngine.shared.isReady {
+                TNTLog.info("[TNT-App] Using Qwen3-ASR")
+                asrText = await QwenASREngine.shared.transcribe(fileURL: audioFile)
+                if asrText.hasPrefix("ERROR:") {
+                    TNTLog.warning("[TNT-App] QwenASR failed, falling back to SFSpeechRecognizer")
+                    asrText = await ASREngine.shared.transcribe(fileURL: audioFile)
+                }
+            } else {
+                TNTLog.info("[TNT-App] Qwen3-ASR not ready, using SFSpeechRecognizer")
+                asrText = await ASREngine.shared.transcribe(fileURL: audioFile)
+            }
         }
         let asrMs = Int(Date().timeIntervalSince(asrStart) * 1000)
 
