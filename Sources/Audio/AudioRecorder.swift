@@ -12,6 +12,7 @@ final class AudioRecorder: NSObject, @unchecked Sendable {
     private var tempFileURL: URL?
 
     var onAudioBuffer: ((Data) -> Void)?
+    var onAmplitude: ((CGFloat) -> Void)?
 
     /// 原始音频副本（处理后保留，用于诊断）
     private(set) var originalFileURL: URL?
@@ -161,9 +162,22 @@ final class AudioRecorder: NSObject, @unchecked Sendable {
             )
         }
 
+        // 计算实时 RMS 振幅
+        let rms = Self.calculateRMS(dataToProcess)
+        let normalizedAmplitude = min(CGFloat(rms) * 10.0, 1.0)
+        onAmplitude?(normalizedAmplitude)
+
         let rawData = samplesToData(dataToProcess)
         writeDataDirectly(dataToProcess)
         onAudioBuffer?(rawData)
+    }
+
+    /// 计算 Float32 音频采样的 RMS
+    private static func calculateRMS(_ samples: [Float]) -> Float {
+        guard !samples.isEmpty else { return 0 }
+        var sum: Float = 0
+        for s in samples { sum += s * s }
+        return sqrt(sum / Float(samples.count))
     }
 
     private func extractFloatSamples(from buffer: AVAudioPCMBuffer) -> [Float]? {

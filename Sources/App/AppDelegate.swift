@@ -126,7 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         TNTLog.info("[TNT-App] >>> Combo DOWN — starting recording")
         AppState.shared.mode = .recording
         statusBarController?.setRecordingState(true)
-        showToast("倾听中...")
+        showRecordingToast()
 
         // 异步截图+OCR（与录音并行，不阻塞录音）
         Task.detached {
@@ -143,6 +143,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         audioRecorder = AudioRecorder()
         audioRecorder?.onAudioBuffer = { [weak self] buffer in
             self?.handleAudioBuffer(buffer)
+        }
+        audioRecorder?.onAmplitude = { [weak self] level in
+            Task { @MainActor in
+                self?.toastWindow?.updateAmplitude(level)
+            }
         }
         audioRecorder?.start()
 
@@ -324,8 +329,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showToast(_ message: String, duration: TimeInterval = 0) {
         toastWindow?.hide()
-        toastWindow = ToastWindow(message: message)
+        toastWindow = ToastWindow()
+        toastWindow?.showStatus(message)
         toastWindow?.show(duration: duration)
+    }
+
+    private func showRecordingToast() {
+        toastWindow?.hide()
+        toastWindow = ToastWindow()
+        toastWindow?.showRecording()
+        toastWindow?.show()
     }
 
     private func showSettings() {

@@ -1,6 +1,6 @@
 {
   "name": "tnt",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "TNT — Touch and Talk: MacOS 全局智能语音输入法",
   "versionCode": "100",
   "buildNumber": "0",
@@ -81,6 +81,20 @@
     }
   },
   "releaseHistory": [
+    {
+      "version": "1.1.1",
+      "date": "2026-04-24",
+      "changes": [
+        "feat: 圆形 Toast 替换矩形文字条，录音时显示 Siri 风格波形动画",
+        "feat: 录音时实时音频振幅驱动波形动画",
+        "feat: 识别中/校正中文字居中显示在圆形内部",
+        "feat: Toast 定位改为屏幕水平居中、距底边 8%",
+        "feat: Toast 出现/消失改为 200ms Fade In/Out",
+        "fix: 更新检查器因 GitHub API 返回 null 导致崩溃",
+        "fix: 静音时不再显示 No Speech Detected 提示",
+        "style: DMG 安装背景改为浅色主题"
+      ]
+    },
     {
       "version": "1.0.0",
       "date": "2026-04-22",
