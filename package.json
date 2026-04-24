@@ -1,6 +1,6 @@
 {
   "name": "tnt",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "TNT — Touch and Talk: MacOS 全局智能语音输入法",
   "versionCode": "100",
   "buildNumber": "0",
@@ -81,6 +81,13 @@
     }
   },
   "releaseHistory": [
+    {
+      "version": "1.1.7",
+      "date": "2026-04-24",
+      "changes": [
+        "fix: project.yml 部署目标从 macOS 14.0 升级到 15.0，解决 AudioCommon 模块部署目标不匹配"
+      ]
+    },
     {
       "version": "1.1.6",
       "date": "2026-04-24",

@@ -2,16 +2,16 @@ name: TNT
 options:
   bundleIdPrefix: com.tnt
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "15.0"
   xcodeVersion: "16.0"
   generateEmptyDirectories: true
 
 settings:
   base:
     SWIFT_VERSION: "6.2"
-    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
     PRODUCT_NAME: TNT
-    MARKETING_VERSION: "1.1.6"
+    MARKETING_VERSION: "1.1.7"
     CURRENT_PROJECT_VERSION: "1"
     INFOPLIST_FILE: Sources/App/Info.plist
     CODE_SIGN_ENTITLEMENTS: Sources/App/TNT.entitlements
