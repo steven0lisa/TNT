@@ -18,8 +18,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             self.statusBarController?.setLoadingState(true)
 
-            // 预热 ASR
-            await ASREngine.shared.warmup()
+            // 预热 ASR（优先 Qwen3-ASR，未下载则使用 SFSpeechRecognizer）
+            let asrType = ModelManager.shared.activeASRType
+            if ModelManager.shared.isDownloaded(type: asrType) {
+                await QwenASREngine.shared.warmup()
+                if QwenASREngine.shared.isReady {
+                    TNTLog.info("[TNT-App] Qwen3-ASR engine ready")
+                } else {
+                    ASREngine.shared.warmup()
+                    TNTLog.info("[TNT-App] Qwen3-ASR warmup failed, using SFSpeechRecognizer")
+                }
+            } else {
+                ASREngine.shared.warmup()
+                TNTLog.info("[TNT-App] Qwen3-ASR not downloaded, using SFSpeechRecognizer")
+            }
 
             // 预热 LLM
             await LLMRefiner.shared.warmup()
@@ -131,7 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 异步截图+OCR（与录音并行，不阻塞录音）
         Task.detached {
             if PaddleOCREngine.isModelDownloaded(),
-               let image = ScreenCapture.captureMainScreen() {
+               let image = await ScreenCapture.captureMainScreen() {
                 let text = await PaddleOCREngine.shared.recognize(image: image)
                 await MainActor.run {
                     self.screenText = text
@@ -208,7 +220,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let sessionId = currentSessionId
 
         TNTLog.info("[TNT-App] Starting ASR...")
-        let asrText = await ASREngine.shared.transcribe(fileURL: audioFile)
+        var asrText: String
+
+        if QwenASREngine.shared.isReady {
+            asrText = await QwenASREngine.shared.transcribe(fileURL: audioFile)
+            // QwenASR 失败时 fallback 到 SFSpeechRecognizer
+            if asrText.hasPrefix("ERROR:") {
+                TNTLog.warning("[TNT-App] QwenASR failed, falling back to SFSpeechRecognizer")
+                asrText = await ASREngine.shared.transcribe(fileURL: audioFile)
+            }
+        } else {
+            asrText = await ASREngine.shared.transcribe(fileURL: audioFile)
+        }
+
         TNTLog.info("[TNT-App] ASR result: \(String(asrText.prefix(50)))")
 
         if let id = sessionId {
