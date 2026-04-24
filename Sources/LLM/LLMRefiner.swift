@@ -95,8 +95,9 @@ final class LLMRefiner: @unchecked Sendable, LLMRefinerProtocol {
             result = result.trimmingCharacters(in: .whitespacesAndNewlines)
 
             TNTLog.info("[LLMRefiner] Result: \(String(result.prefix(100)))")
+            let fullPrompt = "[System]\(systemPrompt)\n\n[User]\(userContent)"
             let finalText = result.isEmpty ? text : result
-            return RefineOutput(text: finalText, prompt: userContent)
+            return RefineOutput(text: finalText, prompt: fullPrompt)
 
         } catch {
             TNTLog.error("[LLMRefiner] Refinement failed: \(error)")

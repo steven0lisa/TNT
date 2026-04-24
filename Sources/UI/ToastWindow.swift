@@ -99,6 +99,7 @@ final class ToastWindow: NSObject {
     func hide() {
         hideTimer?.invalidate()
         hideTimer = nil
+        waveformView?.stopAnimating()
 
         guard let panel else { return }
 
@@ -122,22 +123,23 @@ final class ToastWindow: NSObject {
     /// 切换到录音模式（显示波形，隐藏文字）
     func showRecording() {
         waveformView?.isHidden = false
+        waveformView?.startAnimating()
         statusLabel?.isHidden = true
     }
 
     /// 切换到状态文字模式（隐藏波形，显示居中文字）
     func showStatus(_ text: String) {
+        waveformView?.stopAnimating()
         waveformView?.isHidden = true
         statusLabel?.stringValue = text
         statusLabel?.isHidden = false
-        statusLabel?.sizeToFit()
-        // 重新居中
+        // 固定宽度为 diameter，利用 alignment=.center 自然居中
         if let label = statusLabel {
-            let w = label.frame.width
+            label.sizeToFit()
             label.frame = NSRect(
-                x: (diameter - w) / 2,
+                x: 0,
                 y: diameter / 2 - label.frame.height / 2,
-                width: max(w, diameter - 16),
+                width: diameter,
                 height: label.frame.height
             )
         }

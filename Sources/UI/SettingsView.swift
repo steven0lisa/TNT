@@ -634,26 +634,27 @@ private struct SessionRow: View {
             // LLM result
             if let llm = session.llmResult, !llm.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("LLM")
+                    Text("LLM 输出")
                         .font(.caption2)
                         .foregroundColor(.green)
                     Text(llm)
                         .font(.system(.caption, design: .monospaced))
-                        .lineLimit(3)
+                        .lineLimit(5)
+                        .textSelection(.enabled)
                 }
             }
 
-            // LLM prompt (collapsible)
+            // LLM prompt
             if let prompt = session.llmPrompt, !prompt.isEmpty {
-                DisclosureGroup {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("LLM 提示词")
+                        .font(.caption2)
+                        .foregroundColor(.purple)
                     Text(prompt)
                         .font(.system(.caption2, design: .monospaced))
                         .foregroundColor(.secondary)
+                        .lineLimit(10)
                         .textSelection(.enabled)
-                } label: {
-                    Text("提示词")
-                        .font(.caption2)
-                        .foregroundColor(.purple)
                 }
             }
         }

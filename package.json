@@ -1,6 +1,6 @@
 {
   "name": "tnt",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "TNT — Touch and Talk: MacOS 全局智能语音输入法",
   "versionCode": "100",
   "buildNumber": "0",
@@ -81,6 +81,16 @@
     }
   },
   "releaseHistory": [
+    {
+      "version": "1.1.2",
+      "date": "2026-04-24",
+      "changes": [
+        "fix: 波形动画帧率提升至 60fps，添加独立动画循环和振幅平滑算法",
+        "fix: 音频采样 buffer 从 4096 缩至 1024，回调频率从 ~12Hz 提升至 ~47Hz",
+        "fix: Toast 状态文字（识别中/校正中）水平居中对齐修复",
+        "feat: 诊断面板直接展示 LLM 完整提示词（含 System Prompt）和输出结果"
+      ]
+    },
     {
       "version": "1.1.1",
       "date": "2026-04-24",

@@ -16,14 +16,42 @@ final class SiriWaveformView: NSView {
     // MARK: - Internal State
 
     private(set) var amplitude: CGFloat = 1.0
+    private var smoothedAmplitude: CGFloat = 0
     private var phase: CGFloat = 0
+    private var displayLink: Timer?
 
     // MARK: - Public API
 
     /// Feed normalized amplitude (0..1) to animate the waveform
     func update(withLevel level: CGFloat) {
-        phase += phaseShift
         amplitude = max(level, idleAmplitude)
+    }
+
+    func startAnimating() {
+        guard displayLink == nil else { return }
+        displayLink = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.tick()
+            }
+        }
+    }
+
+    func stopAnimating() {
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
+    // MARK: - Animation Loop
+
+    private func tick() {
+        phase += phaseShift
+        // 平滑过渡：快速响应增长，缓慢衰减
+        if amplitude > smoothedAmplitude {
+            smoothedAmplitude = smoothedAmplitude + (amplitude - smoothedAmplitude) * 0.4
+        } else {
+            smoothedAmplitude = smoothedAmplitude * 0.92 + amplitude * 0.08
+        }
+        smoothedAmplitude = max(smoothedAmplitude, idleAmplitude)
         needsDisplay = true
     }
 
@@ -47,7 +75,7 @@ final class SiriWaveformView: NSView {
 
             let maxAmplitude = halfHeight - strokeLineWidth * 2
             let progress = 1.0 - CGFloat(i) / CGFloat(numberOfWaves)
-            let normedAmplitude = (1.5 * progress - 2.0 / CGFloat(numberOfWaves)) * amplitude
+            let normedAmplitude = (1.5 * progress - 2.0 / CGFloat(numberOfWaves)) * smoothedAmplitude
 
             let multiplier = min(1.0, (progress / 3.0 * 2.0) + (1.0 / 3.0))
             let alpha = multiplier * waveColor.alphaComponent

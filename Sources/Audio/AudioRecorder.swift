@@ -56,7 +56,7 @@ final class AudioRecorder: NSObject, @unchecked Sendable {
             return
         }
 
-        inputNode?.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
+        inputNode?.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
             self?.handleAudioTap(buffer: buffer, inputFormat: inputFormat, outputFormat: outputFormat)
         }
 
