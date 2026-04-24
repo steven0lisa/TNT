@@ -38,11 +38,6 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           APP_PATH="build/Build/Products/Release/TNT.app"
-          DMG_NAME="TNT-${VERSION}.dmg"
-          DMG_PATH="dist/${DMG_NAME}"
-
-          mkdir -p dist
-          rm -f "$DMG_PATH"
 
           # Verify app exists
           if [ ! -d "$APP_PATH" ]; then
@@ -55,17 +50,12 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "$APP_PATH/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "$APP_PATH/Contents/Info.plist"
 
-          # Ad-hoc code sign (prevents "damaged" Gatekeeper error)
+          # Ad-hoc code sign
           codesign --force --deep --sign - "$APP_PATH"
 
-          # Create DMG
-          hdiutil create -volname "TNT ${VERSION}" \
-            -srcfolder "$APP_PATH" \
-            -ov -format UDZO \
-            "$DMG_PATH"
-
-          echo "DMG created: $DMG_PATH"
-          ls -lh "$DMG_PATH"
+          # Create DMG with background + Applications shortcut
+          chmod +x scripts/create-dmg.sh
+          ./scripts/create-dmg.sh "$APP_PATH" "$VERSION" "dist/TNT-${VERSION}.dmg"
 
       - name: Generate changelog
         id: changelog
