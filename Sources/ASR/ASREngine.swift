@@ -43,8 +43,15 @@ final class ASREngine: @unchecked Sendable, ASREngineProtocol {
         return await withCheckedContinuation { continuation in
             recognizer.recognitionTask(with: request) { result, error in
                 if let error = error {
-                    TNTLog.error("[ASREngine] Recognition error: \(error)")
-                    continuation.resume(returning: "ERROR: \(error.localizedDescription)")
+                    // 无语音时静默返回空字符串，不报错
+                    let desc = error.localizedDescription.lowercased()
+                    if desc.contains("no speech") || desc.contains("no recognition") {
+                        TNTLog.debug("[ASREngine] No speech detected, returning empty")
+                        continuation.resume(returning: "")
+                    } else {
+                        TNTLog.error("[ASREngine] Recognition error: \(error)")
+                        continuation.resume(returning: "ERROR: \(error.localizedDescription)")
+                    }
                     return
                 }
 

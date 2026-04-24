@@ -72,8 +72,8 @@ struct GeneralTab: View {
                                 .buttonStyle(.borderedProminent)
                                 .controlSize(.small)
                             }
-                            if !release.body.isEmpty {
-                                Text(release.body)
+                            if let body = release.body, !body.isEmpty {
+                                Text(body)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .lineLimit(5)

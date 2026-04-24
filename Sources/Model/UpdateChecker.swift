@@ -5,8 +5,8 @@ import Foundation
 
 struct GitHubRelease: Codable {
     let tagName: String
-    let name: String
-    let body: String
+    let name: String?
+    let body: String?
     let htmlUrl: String
     let assets: [GitHubAsset]
 
