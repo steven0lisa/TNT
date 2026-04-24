@@ -127,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var audioRecorder: AudioRecorder?
     private var recordingFile: URL?
     private var currentSessionId: String?
+    private var recordingStartTime: Date?
 
     private func handleHotkeyDown() {
         guard AppState.shared.modelsReady else {
@@ -162,6 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         audioRecorder?.start()
+        recordingStartTime = Date()
 
         // 创建诊断会话
         let isBT = AudioRecorder.isBluetoothInputDevice()
@@ -203,7 +205,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         AppState.shared.mode = .recognizing
-        showToast("识别中...")
+        showToast("识别中")
+
+        // 记录录音时长
+        if let start = recordingStartTime {
+            let recordingMs = Int(Date().timeIntervalSince(start) * 1000)
+            if let sid = currentSessionId {
+                SessionStore.shared.updateTiming(sessionId: sid, recordingMs: recordingMs)
+            }
+        }
 
         TNTLog.info("[TNT-App] Audio file: \(file.path)")
 
@@ -219,7 +229,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func recognizeAndInject(audioFile: URL) async {
         let sessionId = currentSessionId
 
+        // 确定实际使用的模型名称
+        let asrModelName: String
+        let llmModelName: String
+        if let info = ModelManager.shared.modelInfo(for: ModelManager.shared.activeASRType) {
+            asrModelName = info.name
+        } else {
+            asrModelName = "SFSpeechRecognizer"
+        }
+        if let info = ModelManager.shared.modelInfo(for: ModelManager.shared.activeLLMType) {
+            llmModelName = info.name
+        } else {
+            llmModelName = "Unknown"
+        }
+
+        // 保存模型信息到诊断记录
+        if let id = sessionId {
+            SessionStore.shared.updateModels(sessionId: id, asrModel: asrModelName, llmModel: llmModelName)
+        }
+
+        // MARK: ASR
         TNTLog.info("[TNT-App] Starting ASR...")
+        let asrStart = Date()
         var asrText: String
 
         if QwenASREngine.shared.isReady {
@@ -232,11 +263,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             asrText = await ASREngine.shared.transcribe(fileURL: audioFile)
         }
+        let asrMs = Int(Date().timeIntervalSince(asrStart) * 1000)
 
         TNTLog.info("[TNT-App] ASR result: \(String(asrText.prefix(50)))")
 
         if let id = sessionId {
             SessionStore.shared.updateASRResult(sessionId: id, result: asrText)
+            SessionStore.shared.updateTiming(sessionId: id, asrMs: asrMs)
         }
 
         await MainActor.run {
@@ -262,25 +295,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         await MainActor.run {
             AppState.shared.mode = .refining
-            showToast("校正中...")
+            showToast("校正中")
         }
 
+        // MARK: LLM
         TNTLog.info("[TNT-App] Starting LLM refinement...")
+        let llmStart = Date()
         let context = screenText.isEmpty ? nil : screenText
         let refineOutput = await LLMRefiner.shared.refine(text: asrText, context: context)
+        let llmMs = Int(Date().timeIntervalSince(llmStart) * 1000)
         TNTLog.info("[TNT-App] LLM result: \(String(refineOutput.text.prefix(50)))")
 
         if let id = sessionId {
             SessionStore.shared.updateLLMResult(sessionId: id, prompt: refineOutput.prompt, result: refineOutput.text)
+            SessionStore.shared.updateTiming(sessionId: id, llmMs: llmMs)
         }
 
         await MainActor.run {
             AppState.shared.mode = .injecting
-            showToast("注入中...")
+            showToast("注入中")
         }
 
+        // MARK: Inject
+        let injectStart = Date()
         let finalText = refineOutput.text.isEmpty || refineOutput.text.hasPrefix("ERROR:") ? asrText : refineOutput.text
         await injectText(finalText)
+        let injectMs = Int(Date().timeIntervalSince(injectStart) * 1000)
+
+        if let id = sessionId {
+            SessionStore.shared.updateTiming(sessionId: id, injectMs: injectMs)
+        }
     }
 
     private func injectText(_ text: String) async {
@@ -315,6 +359,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         cleanupRecordingFile()
         screenText = ""
         currentSessionId = nil
+        recordingStartTime = nil
     }
 
     private func finishWithError(_ message: String) {
@@ -324,6 +369,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBarController?.setRecordingState(false)
         cleanupRecordingFile()
         screenText = ""
+        recordingStartTime = nil
 
         Task {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -339,6 +385,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         cleanupRecordingFile()
         screenText = ""
         currentSessionId = nil
+        recordingStartTime = nil
     }
 
     private func cleanupRecordingFile() {

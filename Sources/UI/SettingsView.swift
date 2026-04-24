@@ -619,6 +619,39 @@ private struct SessionRow: View {
                 }
             }
 
+            // 模型与耗时信息
+            if session.asrModel != nil || session.llmModel != nil {
+                HStack(spacing: 6) {
+                    if let asr = session.asrModel {
+                        Text("ASR: \(asr)")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                    if let llm = session.llmModel {
+                        Text("LLM: \(llm)")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                    }
+                    Spacer()
+                }
+            }
+
+            let timingParts: [String] = [
+                session.recordingDurationMs.map { "录音 \($0)ms" },
+                session.asrDurationMs.map { "ASR \($0)ms" },
+                session.llmDurationMs.map { "LLM \($0)ms" },
+                session.injectDurationMs.map { "注入 \($0)ms" }
+            ].compactMap { $0 }
+
+            if !timingParts.isEmpty {
+                HStack(spacing: 6) {
+                    Text(timingParts.joined(separator: " | "))
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+            }
+
             // ASR result
             if let asr = session.asrResult, !asr.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {

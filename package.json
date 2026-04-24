@@ -1,6 +1,6 @@
 {
   "name": "tnt",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "description": "TNT — Touch and Talk: MacOS 全局智能语音输入法",
   "versionCode": "100",
   "buildNumber": "0",
@@ -81,6 +81,15 @@
     }
   },
   "releaseHistory": [
+    {
+      "version": "1.1.4",
+      "date": "2026-04-24",
+      "changes": [
+        "feat: 诊断面板记录每次会话使用的 ASR 模型和 LLM 模型名称",
+        "feat: 诊断面板记录各阶段处理耗时（录音/ASR/LLM/注入，单位毫秒）",
+        "fix: Toast 状态文字去掉省略号（识别中... → 识别中，校正中... → 校正中）"
+      ]
+    },
     {
       "version": "1.1.3",
       "date": "2026-04-24",

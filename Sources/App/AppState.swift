@@ -12,8 +12,8 @@ enum AppMode: Equatable, Sendable {
         switch self {
         case .idle: return "就绪"
         case .recording: return "倾听中..."
-        case .recognizing: return "识别中..."
-        case .refining: return "校正中..."
+        case .recognizing: return "识别中"
+        case .refining: return "校正中"
         case .injecting: return "注入中..."
         case .error(let msg): return "错误: \(msg)"
         }

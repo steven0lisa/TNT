@@ -14,6 +14,16 @@ struct SessionRecord: Codable, Identifiable {
     var llmResult: String?
     var errorMessage: String?
 
+    // 模型信息
+    var asrModel: String?
+    var llmModel: String?
+
+    // 各阶段耗时（毫秒）
+    var recordingDurationMs: Int?
+    var asrDurationMs: Int?
+    var llmDurationMs: Int?
+    var injectDurationMs: Int?
+
     var displayTime: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MM-dd HH:mm:ss"
@@ -98,6 +108,26 @@ final class SessionStore: @unchecked Sendable {
     func updateError(sessionId: String, error: String) {
         lock.withLock {
             updateRecordLocked(id: sessionId) { $0.errorMessage = error }
+        }
+    }
+
+    func updateModels(sessionId: String, asrModel: String, llmModel: String) {
+        lock.withLock {
+            updateRecordLocked(id: sessionId) { r in
+                r.asrModel = asrModel
+                r.llmModel = llmModel
+            }
+        }
+    }
+
+    func updateTiming(sessionId: String, recordingMs: Int? = nil, asrMs: Int? = nil, llmMs: Int? = nil, injectMs: Int? = nil) {
+        lock.withLock {
+            updateRecordLocked(id: sessionId) { r in
+                if let v = recordingMs { r.recordingDurationMs = v }
+                if let v = asrMs { r.asrDurationMs = v }
+                if let v = llmMs { r.llmDurationMs = v }
+                if let v = injectMs { r.injectDurationMs = v }
+            }
         }
     }
 
