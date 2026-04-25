@@ -1,6 +1,6 @@
 {
   "name": "tnt",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "TNT — Touch and Talk: MacOS 全局智能语音输入法",
   "versionCode": "100",
   "buildNumber": "0",
@@ -82,13 +82,17 @@
   },
   "releaseHistory": [
     {
-      "version": "1.1.9",
+      "version": "1.1.10",
       "date": "2026-04-25",
       "changes": [
         "fix: 火山配置输入框替换为原生 NSTextField 包装器，支持右键菜单和 Cmd+V 粘贴",
         "fix: 每个配置项旁添加剪贴板粘贴按钮，确保密钥可粘贴",
         "fix: Secret Key 支持显示/隐藏切换",
-        "fix: WAV 解析支持 WAVEFORMATEXTENSIBLE 格式（65534），兼容 AVAudioFile 生成的 Float32 WAV"
+        "fix: WAV 解析支持 WAVEFORMATEXTENSIBLE 格式（65534），兼容 AVAudioFile 生成的 Float32 WAV",
+        "fix: VolcASREngine 二进制协议 Gzip 压缩修正（full client request + audio chunks 均需 gzip）",
+        "fix: VolcASREngine 音频序列号从 2 开始（服务器内部占用 seq 1 给 full client request）",
+        "fix: VolcASREngine 实时流式发送音频 chunk（180ms 间隔模拟 16kHz PCM 实时速率）",
+        "fix: 诊断面板正确显示当前选用的 ASR 引擎名称（volc/apple/qwen）"
       ]
     },
     {

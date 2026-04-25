@@ -1,4 +1,5 @@
 import Foundation
+import zlib
 
 /// 火山引擎（字节跳动）双向流式语音识别引擎
 /// 使用 bigmodel_async 接口，WebSocket + 自定义二进制协议
@@ -118,6 +119,53 @@ final class VolcASREngine: @unchecked Sendable, ASREngineProtocol {
         (UInt32(data[offset + 2]) << 16) | (UInt32(data[offset + 3]) << 24)
     }
 
+    // MARK: - Gzip Compression (required by VolcEngine protocol)
+
+    private func gzipCompress(_ data: Data) -> Data? {
+        guard !data.isEmpty else { return nil }
+
+        var stream = z_stream()
+        let initResult = deflateInit2_(
+            &stream,
+            Z_DEFAULT_COMPRESSION,
+            Z_DEFLATED,
+            15 + 16, // windowBits: 15 for max window, +16 for gzip format
+            8,       // memLevel
+            Z_DEFAULT_STRATEGY,
+            ZLIB_VERSION,
+            Int32(MemoryLayout<z_stream>.size)
+        )
+
+        guard initResult == Z_OK else { return nil }
+        defer { deflateEnd(&stream) }
+
+        var result = Data()
+        let chunkSize = 64 * 1024
+
+        data.withUnsafeBytes { rawBuffer in
+            guard let baseAddress = rawBuffer.baseAddress else { return }
+            let bytes = baseAddress.assumingMemoryBound(to: UInt8.self)
+            stream.next_in = UnsafeMutablePointer<UInt8>(mutating: bytes)
+            stream.avail_in = uInt(data.count)
+
+            var status: Int32 = Z_OK
+            repeat {
+                var outBuffer = [UInt8](repeating: 0, count: chunkSize)
+                status = outBuffer.withUnsafeMutableBufferPointer { outPtr -> Int32 in
+                    stream.next_out = outPtr.baseAddress
+                    stream.avail_out = uInt(chunkSize)
+                    return deflate(&stream, Z_FINISH)
+                }
+                let have = chunkSize - Int(stream.avail_out)
+                if have > 0 {
+                    result.append(contentsOf: outBuffer.prefix(have))
+                }
+            } while status == Z_OK
+        }
+
+        return result.isEmpty ? nil : result
+    }
+
     // MARK: - WebSocket Recognition
 
     private func performRecognition(pcmData: Data) async -> String {
@@ -206,15 +254,22 @@ final class VolcASREngine: @unchecked Sendable, ASREngineProtocol {
                         let end = min(start + chunkSize, pcmData.count)
                         let chunk = pcmData.subdata(in: start..<end)
                         let isLast = (i == totalChunks - 1)
-                        let seq = UInt32(i + 1)
+                        // Server auto-assigns seq 1 to full client request, audio starts from 2
+                        let seq = UInt32(i + 2)
 
                         let packet = self.buildAudioPacket(data: chunk, sequence: isLast ? nil : seq)
                         try await task.send(.data(packet))
+
+                        // Stream at real-time rate: 6400 bytes = 200ms @ 16kHz 16bit mono
+                        // Use 180ms interval to stay slightly ahead of real-time
+                        if !isLast {
+                            try await Task.sleep(nanoseconds: 180_000_000)
+                        }
                     }
                     TNTLog.info("[VolcASR] Sent \(totalChunks) audio chunks, total \(pcmData.count) bytes")
 
                     // 3. Wait for server to finish processing
-                    try await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+                    try await Task.sleep(nanoseconds: 4_000_000_000) // 4 seconds
 
                     task.cancel(with: .normalClosure, reason: nil)
                     state.complete(with: state.resultText)
@@ -230,14 +285,14 @@ final class VolcASREngine: @unchecked Sendable, ASREngineProtocol {
 
     // MARK: - Binary Protocol Encoding
 
-    /// Build full client request (JSON configuration)
+    /// Build full client request (JSON configuration, Gzip compressed)
     private func buildFullClientRequest() -> Data {
         // Header: 4 bytes
         //  Byte 0: version(4) + header_size(4)  = 0b0001_0001 = 0x11
         //  Byte 1: msg_type(4) + flags(4)        = 0b0001_0000 = 0x10 (full req, no seq)
-        //  Byte 2: serialization(4) + compress(4) = 0b0001_0000 = 0x10 (JSON, no compress)
+        //  Byte 2: serialization(4) + compress(4) = 0b0001_0001 = 0x11 (JSON, Gzip)
         //  Byte 3: reserved                      = 0x00
-        let header = Data([0x11, 0x10, 0x10, 0x00])
+        let header = Data([0x11, 0x10, 0x11, 0x00])
 
         let payload: [String: Any] = [
             "user": [
@@ -259,31 +314,38 @@ final class VolcASREngine: @unchecked Sendable, ASREngineProtocol {
             ]
         ]
 
-        guard let payloadData = try? JSONSerialization.data(withJSONObject: payload) else {
+        guard let payloadData = try? JSONSerialization.data(withJSONObject: payload),
+              let compressed = gzipCompress(payloadData) else {
             return header + writeUInt32BE(0)
         }
 
-        return header + writeUInt32BE(UInt32(payloadData.count)) + payloadData
+        return header + writeUInt32BE(UInt32(compressed.count)) + compressed
     }
 
     /// Build audio packet (normal chunk with sequence, or last chunk without sequence)
+    /// All audio payloads are Gzip compressed per VolcEngine protocol specification.
     private func buildAudioPacket(data: Data, sequence: UInt32?) -> Data {
+        guard let compressed = gzipCompress(data) else {
+            TNTLog.warning("[VolcASR] Gzip compression failed for audio chunk")
+            return Data()
+        }
+
         if let seq = sequence {
             // Normal chunk with positive sequence number
             //  Byte 0: 0x11 (version=1, header_size=1)
             //  Byte 1: 0x21 (type=0b0010, flags=0b0001 = has positive seq)
-            //  Byte 2: 0x00 (serialization=none, compression=none)
+            //  Byte 2: 0x01 (serialization=none, compression=Gzip)
             //  Byte 3: 0x00 (reserved)
-            let header = Data([0x11, 0x21, 0x00, 0x00])
-            return header + writeUInt32BE(seq) + writeUInt32BE(UInt32(data.count)) + data
+            let header = Data([0x11, 0x21, 0x01, 0x00])
+            return header + writeUInt32BE(seq) + writeUInt32BE(UInt32(compressed.count)) + compressed
         } else {
             // Last chunk (负包) - no sequence, just last indicator
             //  Byte 0: 0x11
             //  Byte 1: 0x22 (type=0b0010, flags=0b0010 = last chunk, no seq)
-            //  Byte 2: 0x00
+            //  Byte 2: 0x01 (serialization=none, compression=Gzip)
             //  Byte 3: 0x00
-            let header = Data([0x11, 0x22, 0x00, 0x00])
-            return header + writeUInt32BE(UInt32(data.count)) + data
+            let header = Data([0x11, 0x22, 0x01, 0x00])
+            return header + writeUInt32BE(UInt32(compressed.count)) + compressed
         }
     }
 

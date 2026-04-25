@@ -96,7 +96,7 @@ final class ModelManager: @unchecked Sendable {
     }
 
     var volcResourceId: String {
-        get { UserDefaults.standard.string(forKey: "volcResourceId") ?? "volc.bigasr.sauc.duration" }
+        get { UserDefaults.standard.string(forKey: "volcResourceId") ?? "volc.seedasr.sauc.duration" }
         set { UserDefaults.standard.set(newValue, forKey: "volcResourceId") }
     }
 
