@@ -242,12 +242,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 确定实际使用的模型名称
         let asrModelName: String
-        let llmModelName: String
-        if let info = ModelManager.shared.modelInfo(for: ModelManager.shared.activeASRType) {
-            asrModelName = info.name
-        } else {
-            asrModelName = "SFSpeechRecognizer"
+        switch ModelManager.shared.selectedASREngine {
+        case "volc":
+            asrModelName = "VolcEngine ASR"
+        case "apple":
+            asrModelName = "Apple SFSpeechRecognizer"
+        default:
+            if let info = ModelManager.shared.modelInfo(for: ModelManager.shared.activeASRType) {
+                asrModelName = info.name
+            } else {
+                asrModelName = "Apple SFSpeechRecognizer"
+            }
         }
+        let llmModelName: String
         if let info = ModelManager.shared.modelInfo(for: ModelManager.shared.activeLLMType) {
             llmModelName = info.name
         } else {
