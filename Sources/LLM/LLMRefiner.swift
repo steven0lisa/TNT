@@ -43,23 +43,60 @@ final class LLMRefiner: @unchecked Sendable, LLMRefinerProtocol {
         }
     }
 
+    /// 判断是否为长文本（需要结构化整理）
+    private func isLongText(_ text: String) -> Bool {
+        // 中文字符按1算，总字符数超过100视为长文本
+        return text.count > 100
+    }
+
     func refine(text: String, context: String? = nil) async -> RefineOutput {
         guard !text.isEmpty else { return RefineOutput(text: text, prompt: "") }
 
         do {
             let container = try await loadModel()
+            let isLong = isLongText(text)
 
-            let systemPrompt = "你是一个专业的语音输入助手。只输出校正后的文字，不要添加任何前缀、解释或思考过程。严禁输出<think> 标签及其内容。"
-            let refinePrompt = """
-                请对以下语音识别结果进行校正，直接输出结果，不要解释：
-                1. 修正同音字错误
-                2. 删除口吃、重复、填充词（如嗯、啊、那个、就是说、呃、这个这个、重复的字词）
-                3. 如果是中文数字（一二三四...），转为阿拉伯数字（1234...）
-                4. 添加合适的标点符号
-                5. 调整语序使表达更通顺
-                6. 如果开头或结尾出现孤立的无意义单字（如"嗯"、"啊"、"呃"、生僻字、乱码），直接删除
-                7. 如果识别结果整体无意义（全是语气词或杂音），直接返回空字符串
-                """
+            let systemPrompt: String
+            let refinePrompt: String
+            let maxTokens: Int
+
+            if isLong {
+                // 长文本：结构化整理，提炼观点，输出正式文案
+                systemPrompt = """
+                    你是一位专业的语音输入文字整理助手。你的任务是将用户的语音转录结果整理成结构清晰、表达正式的文案。
+                    只输出整理后的最终文字，不要添加任何前缀、解释或思考过程。严禁输出<think>标签及其内容。
+                    """
+                refinePrompt = """
+                    请对以下语音识别结果进行深度整理和校正，输出一份结构清晰、表达正式的文案：
+
+                    1. 修正所有语音识别错误（同音字、近音词、断句错误等）
+                    2. 删除口语化填充词和重复（如嗯、啊、那个、就是说、呃、这个这个、来回重复的字词）
+                    3. 提炼用户的核心观点和论述逻辑，保持原意不变
+                    4. 将散乱的内容整理成有条理的结构：按观点/要点分段，必要时使用编号（1. 2. 3.）或项目符号
+                    5. 将口语化表达转为书面语，但保留用户原有的语气和风格
+                    6. 如果是中文数字且适合转为阿拉伯数字的地方，进行转换
+                    7. 添加合适的标点符号，确保长句有适当的断句
+                    8. 如果开头或结尾有无意义的单字（如"嗯"、"啊"、"呃"），直接删除
+                    9. 如果识别结果整体无意义，直接返回空字符串
+
+                    注意：用户可能在反复调整论述，请识别出最终意图，忽略中间犹豫和反复的部分。
+                    """
+                maxTokens = 2048
+            } else {
+                // 短文本：简洁校正
+                systemPrompt = "你是一个专业的语音输入助手。只输出校正后的文字，不要添加任何前缀、解释或思考过程。严禁输出<think> 标签及其内容。"
+                refinePrompt = """
+                    请对以下语音识别结果进行校正，直接输出结果，不要解释：
+                    1. 修正同音字错误
+                    2. 删除口吃、重复、填充词（如嗯、啊、那个、就是说、呃、这个这个、重复的字词）
+                    3. 如果是中文数字（一二三四...），转为阿拉伯数字（1234...）
+                    4. 添加合适的标点符号
+                    5. 调整语序使表达更通顺
+                    6. 如果开头或结尾出现孤立的无意义单字（如"嗯"、"啊"、"呃"、生僻字、乱码），直接删除
+                    7. 如果识别结果整体无意义（全是语气词或杂音），直接返回空字符串
+                    """
+                maxTokens = 1024
+            }
 
             var userContent = "语音识别原始结果：\(text)\n\n\(refinePrompt)"
             if let context = context, !context.isEmpty {
@@ -78,7 +115,7 @@ final class LLMRefiner: @unchecked Sendable, LLMRefinerProtocol {
             let lmInput = try await container.prepare(input: userInput)
 
             let parameters = GenerateParameters(
-                maxTokens: 1024,
+                maxTokens: maxTokens,
                 temperature: 0.1
             )
 
@@ -94,7 +131,7 @@ final class LLMRefiner: @unchecked Sendable, LLMRefinerProtocol {
             result = filterThinkTags(result)
             result = result.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            TNTLog.info("[LLMRefiner] Result: \(String(result.prefix(100)))")
+            TNTLog.info("[LLMRefiner] Result (isLong=\(isLong)): \(String(result.prefix(100)))")
             let fullPrompt = "[System]\(systemPrompt)\n\n[User]\(userContent)"
             let finalText = result.isEmpty ? text : result
             return RefineOutput(text: finalText, prompt: fullPrompt)

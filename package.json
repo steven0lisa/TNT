@@ -1,6 +1,6 @@
 {
   "name": "tnt",
-  "version": "1.1.10",
+  "version": "1.1.11",
   "description": "TNT — Touch and Talk: MacOS 全局智能语音输入法",
   "versionCode": "100",
   "buildNumber": "0",
@@ -81,6 +81,16 @@
     }
   },
   "releaseHistory": [
+    {
+      "version": "1.1.11",
+      "date": "2026-04-25",
+      "changes": [
+        "feat: LLM 校正提示词优化，长文本（>100 字）自动切换为结构化整理模式",
+        "feat: 结构化整理：提炼核心观点、去除口语化填充词、按要点分段输出正式文案",
+        "feat: 短文本保持原有简洁校正策略（去重、改错、加标点）",
+        "feat: 长文本 maxTokens 扩展至 2048，保证完整输出"
+      ]
+    },
     {
       "version": "1.1.10",
       "date": "2026-04-25",
