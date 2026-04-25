@@ -1,6 +1,52 @@
 import AVFoundation
 import SwiftUI
 
+// MARK: - Native macOS TextField with full context menu support
+/// Wraps NSTextField to ensure right-click menu (Cut/Copy/Paste) and Cmd+V work reliably
+struct MacTextField: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String = ""
+    var isSecure: Bool = false
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field: NSTextField
+        if isSecure {
+            let secure = NSSecureTextField()
+            secure.allowsEditingTextAttributes = false
+            field = secure
+        } else {
+            field = NSTextField()
+        }
+        field.placeholderString = placeholder
+        field.stringValue = text
+        field.delegate = context.coordinator
+        field.isEditable = true
+        field.isSelectable = true
+        field.focusRingType = .default
+        return field
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        let parent: MacTextField
+        init(_ parent: MacTextField) { self.parent = parent }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+    }
+}
+
 struct SettingsView: View {
     @StateObject private var modelManager = ModelManagerWrapper.shared
 
@@ -154,6 +200,7 @@ struct ModelsTab: View {
     @State private var volcAppId: String = ModelManager.shared.volcAppId
     @State private var volcAccessKey: String = ModelManager.shared.volcAccessKey
     @State private var volcSecretKey: String = ModelManager.shared.volcSecretKey
+    @State private var showSecretKey: Bool = false
 
     var body: some View {
         Form {
@@ -213,12 +260,48 @@ struct ModelsTab: View {
                             .foregroundColor(.secondary)
 
                         VStack(alignment: .leading, spacing: 6) {
-                            TextField("App ID", text: $volcAppId)
-                                .textFieldStyle(.roundedBorder)
-                            TextField("Access Token", text: $volcAccessKey)
-                                .textFieldStyle(.roundedBorder)
-                            SecureField("Secret Key", text: $volcSecretKey)
-                                .textFieldStyle(.roundedBorder)
+                            HStack(spacing: 4) {
+                                MacTextField(text: $volcAppId, placeholder: "App ID", isSecure: false)
+                                    .frame(height: 22)
+                                Button(action: {
+                                    if let s = NSPasteboard.general.string(forType: .string) { volcAppId = s }
+                                }) {
+                                    Image(systemName: "doc.on.clipboard")
+                                        .font(.caption)
+                                }
+                                .buttonStyle(.plain)
+                                .help("从剪贴板粘贴")
+                            }
+                            HStack(spacing: 4) {
+                                MacTextField(text: $volcAccessKey, placeholder: "Access Token", isSecure: false)
+                                    .frame(height: 22)
+                                Button(action: {
+                                    if let s = NSPasteboard.general.string(forType: .string) { volcAccessKey = s }
+                                }) {
+                                    Image(systemName: "doc.on.clipboard")
+                                        .font(.caption)
+                                }
+                                .buttonStyle(.plain)
+                                .help("从剪贴板粘贴")
+                            }
+                            HStack(spacing: 4) {
+                                MacTextField(text: $volcSecretKey, placeholder: "Secret Key", isSecure: !showSecretKey)
+                                    .frame(height: 22)
+                                Button(action: { showSecretKey.toggle() }) {
+                                    Image(systemName: showSecretKey ? "eye.slash" : "eye")
+                                        .font(.caption)
+                                }
+                                .buttonStyle(.plain)
+                                .help(showSecretKey ? "隐藏密钥" : "显示密钥")
+                                Button(action: {
+                                    if let s = NSPasteboard.general.string(forType: .string) { volcSecretKey = s }
+                                }) {
+                                    Image(systemName: "doc.on.clipboard")
+                                        .font(.caption)
+                                }
+                                .buttonStyle(.plain)
+                                .help("从剪贴板粘贴")
+                            }
                             Button("保存配置") {
                                 modelManager.updateVolcConfig(
                                     appId: volcAppId,

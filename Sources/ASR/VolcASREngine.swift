@@ -82,9 +82,10 @@ final class VolcASREngine: @unchecked Sendable, ASREngineProtocol {
         }
 
         // Format 1 = PCM integer, Format 3 = IEEE float
-        if audioFormat == 1 && bitsPerSample == 16 {
+        // Format 65534 (0xFFFE) = WAVEFORMATEXTENSIBLE (used by AVAudioFile for Float32)
+        if (audioFormat == 1 || audioFormat == 65534) && bitsPerSample == 16 {
             return pcm
-        } else if audioFormat == 3 && bitsPerSample == 32 {
+        } else if (audioFormat == 3 || audioFormat == 65534) && bitsPerSample == 32 {
             return convertFloat32ToInt16LE(pcm)
         } else {
             TNTLog.error("[VolcASR] Unsupported audio format code: \(audioFormat), bits: \(bitsPerSample)")

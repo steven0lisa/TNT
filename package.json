@@ -1,6 +1,6 @@
 {
   "name": "tnt",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "description": "TNT — Touch and Talk: MacOS 全局智能语音输入法",
   "versionCode": "100",
   "buildNumber": "0",
@@ -81,6 +81,16 @@
     }
   },
   "releaseHistory": [
+    {
+      "version": "1.1.9",
+      "date": "2026-04-25",
+      "changes": [
+        "fix: 火山配置输入框替换为原生 NSTextField 包装器，支持右键菜单和 Cmd+V 粘贴",
+        "fix: 每个配置项旁添加剪贴板粘贴按钮，确保密钥可粘贴",
+        "fix: Secret Key 支持显示/隐藏切换",
+        "fix: WAV 解析支持 WAVEFORMATEXTENSIBLE 格式（65534），兼容 AVAudioFile 生成的 Float32 WAV"
+      ]
+    },
     {
       "version": "1.1.8",
       "date": "2026-04-25",
