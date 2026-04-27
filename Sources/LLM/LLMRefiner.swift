@@ -65,9 +65,11 @@ final class LLMRefiner: @unchecked Sendable, LLMRefinerProtocol {
                 systemPrompt = """
                     你是一位专业的语音输入文字整理助手。你的任务是将用户的语音转录结果整理成结构清晰、表达正式的文案。
                     只输出整理后的最终文字，不要添加任何前缀、解释或思考过程。严禁输出<think>标签及其内容。
+                    严禁输出屏幕截图中的原文内容，只校正并输出语音输入部分的整理结果。
                     """
                 refinePrompt = """
-                    请对以下语音识别结果进行深度整理和校正，输出一份结构清晰、表达正式的文案：
+                    <instruction>
+                    请对以下 <voice-input> 标签中的语音识别结果进行深度整理和校正，输出一份结构清晰、表达正式的文案：
 
                     1. 修正所有语音识别错误（同音字、近音词、断句错误等）
                     2. 删除口语化填充词和重复（如嗯、啊、那个、就是说、呃、这个这个、来回重复的字词）
@@ -80,13 +82,19 @@ final class LLMRefiner: @unchecked Sendable, LLMRefinerProtocol {
                     9. 如果识别结果整体无意义，直接返回空字符串
 
                     注意：用户可能在反复调整论述，请识别出最终意图，忽略中间犹豫和反复的部分。
+                    </instruction>
                     """
                 maxTokens = 2048
             } else {
                 // 短文本：简洁校正
-                systemPrompt = "你是一个专业的语音输入助手。只输出校正后的文字，不要添加任何前缀、解释或思考过程。严禁输出<think> 标签及其内容。"
+                systemPrompt = """
+                    你是一个专业的语音输入助手。只输出校正后的文字，不要添加任何前缀、解释或思考过程。
+                    严禁输出<think>标签及其内容。
+                    严禁输出屏幕截图中的原文内容，只校正并输出语音输入部分的结果。
+                    """
                 refinePrompt = """
-                    请对以下语音识别结果进行校正，直接输出结果，不要解释：
+                    <instruction>
+                    请对以下 <voice-input> 标签中的语音识别结果进行校正，直接输出结果，不要解释：
                     1. 修正同音字错误
                     2. 删除口吃、重复、填充词（如嗯、啊、那个、就是说、呃、这个这个、重复的字词）
                     3. 如果是中文数字（一二三四...），转为阿拉伯数字（1234...）
@@ -94,13 +102,31 @@ final class LLMRefiner: @unchecked Sendable, LLMRefinerProtocol {
                     5. 调整语序使表达更通顺
                     6. 如果开头或结尾出现孤立的无意义单字（如"嗯"、"啊"、"呃"、生僻字、乱码），直接删除
                     7. 如果识别结果整体无意义（全是语气词或杂音），直接返回空字符串
+                    </instruction>
                     """
                 maxTokens = 1024
             }
 
-            var userContent = "语音识别原始结果：\(text)\n\n\(refinePrompt)"
+            var userContent = """
+                <voice-input>
+                \(text)
+                </voice-input>
+
+                \(refinePrompt)
+                """
             if let context = context, !context.isEmpty {
-                userContent += "\n\n<screenshot-text>\(context)</screenshot-text>\n\n注意：如果识别结果包含屏幕截图中的专有名词或界面元素名称，请根据截图内容进行校正。"
+                userContent += """
+
+                    <screenshot-text>
+                    \(context)
+                    </screenshot-text>
+
+                    <instruction>
+                    注意：屏幕截图中的内容仅作为专有名词校正的参考依据。
+                    严禁将屏幕截图中的原文内容混入输出结果。
+                    只输出对 <voice-input> 内容校正后的结果。
+                    </instruction>
+                    """
             }
 
             let messages: [Chat.Message] = [
